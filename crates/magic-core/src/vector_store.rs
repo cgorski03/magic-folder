@@ -1,13 +1,12 @@
 use arrow_array::RecordBatchIterator;
 use arrow_array::{ArrayRef, FixedSizeListArray, Float32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, FieldRef, Schema, SchemaRef};
-use futures::stream::StreamExt;
+use lancedb::Connection;
 use lancedb::Result;
-use lancedb::connection::Connection;
 use lancedb::query::QueryBase;
+use lancedb::query::Select::Columns;
 use std::path::Path;
 use std::sync::Arc;
-
 // Match to output dim
 const EMBEDDING_DIM: i32 = 768;
 const EMBEDDING_FIELD_NAME: &str = "vector";
@@ -98,16 +97,16 @@ impl VectorStore {
     ) -> Result<Vec<(String, f32)>> {
         let tbl = self.conn.open_table(&self.table_name).execute().await?;
 
-        let results = tbl
-            .vector_search(query_vector)?
-            .limit(top_k)
-            // Only thing we need is the path
-            .select(&["path"])
-            // Use stream for if there are a ton of results
-            .execute_stream()
-            .await?;
+        let results = lancedb::query::ExecutableQuery::execute(
+            &tbl.vector_search(query_vector)?
+                .limit(top_k)
+                // Only thing we need is the path
+                .select(Columns(vec![String::from("path")])),
+        )
+        .await?;
 
         let mut similar_files = Vec::new();
+        use futures::TryStreamExt;
         let batches: Vec<RecordBatch> = results.try_collect().await?;
 
         for batch in batches {
