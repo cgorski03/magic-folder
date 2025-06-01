@@ -1,0 +1,22 @@
+[package]
+# This package will contain the main business logic for the Magic Folder project.
+name = "magic-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] } # Async runtime
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false } # HTTP client for Ollama
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0" # For error handling
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# File System Watching
+notify = "6.1"
+notify-debouncer-full = "0.3" # Debouncer for notify
+
+# Database
+rusqlite = { version = "0.31", features = ["bundled"] } # SQLite
+lancedb = "0.6" # LanceDB
