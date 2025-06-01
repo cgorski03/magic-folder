@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2" # Recommended for new workspaces
+members = [
+    "crates/magic-api",
+    "crates/magic-core",
+    "crates/magic-cli",
+]
