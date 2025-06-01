@@ -1,6 +1,6 @@
 use arrow_array::RecordBatchIterator;
-use arrow_array::{ArrayRef, FixedSizeListArray, Float32Array, RecordBatch, StringArray};
-use arrow_schema::{DataType, Field, FieldRef, Schema, SchemaRef};
+use arrow_array::{Array, ArrayRef, FixedSizeListArray, Float32Array, RecordBatch, StringArray};
+use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use lancedb::Connection;
 use lancedb::Result;
 use lancedb::query::QueryBase;
@@ -8,7 +8,7 @@ use lancedb::query::Select::Columns;
 use std::path::Path;
 use std::sync::Arc;
 // Match to output dim
-const EMBEDDING_DIM: i32 = 768;
+const EMBEDDING_DIM: i32 = 1024;
 const EMBEDDING_FIELD_NAME: &str = "vector";
 
 pub struct VectorStore {
@@ -59,17 +59,14 @@ impl VectorStore {
         let path_array = StringArray::from(vec![path]);
         let path_array_ref: ArrayRef = Arc::new(path_array);
 
-        // Get the field reference for the vector column
-        let list_field_ref = self.schema.field_with_name(EMBEDDING_FIELD_NAME)?;
-        let field_arc: FieldRef = Arc::new(list_field_ref.clone());
-
         // Create vector array
         let vector_values_array: Float32Array = Float32Array::from(vector);
         let values_array_ref: ArrayRef = Arc::new(vector_values_array);
 
-        // Create the fixed size list array
+        // Create the fixed size list array with the correct field for inner items
+        let inner_field = Arc::new(Field::new("item", DataType::Float32, true));
         let list_array = FixedSizeListArray::try_new(
-            field_arc,     // The schema for this FSL column
+            inner_field,   // The field for the inner Float32 items
             EMBEDDING_DIM, // The fixed size of each list
             values_array_ref,
             None,
@@ -85,7 +82,7 @@ impl VectorStore {
         let batches = vec![Ok(batch)];
         let batch_reader = RecordBatchIterator::new(batches.into_iter(), self.schema.clone());
 
-        tbl.add(batch_reader);
+        tbl.add(batch_reader).execute().await?;
 
         Ok(())
     }

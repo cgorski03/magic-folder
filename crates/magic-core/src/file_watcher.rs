@@ -1,22 +1,20 @@
-use notify_debouncer_full::{new_debouncer, DebounceEventResult, DebouncedEvent, Debouncer};
-use notify::{RecommendedWatcher, RecursiveMode};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify_debouncer_full::{DebouncedEvent, Debouncer, FileIdMap, new_debouncer};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, RecvError};
 use std::time::Duration;
 
 pub struct FileWatcher {
-    _debouncer: Debouncer<RecommendedWatcher>,  // Keep alive with _prefix
+    _debouncer: Debouncer<RecommendedWatcher, FileIdMap>, // Keep alive with _prefix
     receiver: Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>,
 }
 
 impl FileWatcher {
-    pub fn new(path: PathBuf) -> anyhow::Result<Self> {
+    pub fn new(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let (tx, rx) = std::sync::mpsc::channel();
         let mut debouncer = new_debouncer(Duration::from_secs(2), None, tx)?;
 
-        debouncer
-            .watcher()
-            .watch(&path, RecursiveMode::Recursive)?;
+        debouncer.watcher().watch(&path, RecursiveMode::Recursive)?;
 
         Ok(Self {
             _debouncer: debouncer,

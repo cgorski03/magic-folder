@@ -1,15 +1,14 @@
-use rusqlite::{params, Connection, Result};
+use rusqlite::{Connection, Result, params};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
 pub struct MetadataStore {
     // Wrap connection for async access
     conn: Arc<Mutex<Connection>>,
 }
 
 impl MetadataStore {
-    pub async fn new(db_path: &Path) -> cResult<Self> {
+    pub async fn new(db_path: &Path) -> Result<Self> {
         let conn = Connection::open(db_path)?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS files (
@@ -20,7 +19,9 @@ impl MetadataStore {
             )",
             [],
         )?;
-        Ok(Self { conn: Arc::new(Mutex::new(conn)) })
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+        })
     }
 
     pub async fn add_file_metadata(&self, path: &str, vector_id: &str) -> Result<i64> {
