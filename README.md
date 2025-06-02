@@ -362,4 +362,4 @@ cargo test
 
 ## License
 
-[Add your license information here]
+This project is licensed under the MIT License.
