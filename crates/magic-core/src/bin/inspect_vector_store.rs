@@ -1,6 +1,3 @@
-use lancedb::Connection;
-use std::path::PathBuf;
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Vector Store Inspection");
