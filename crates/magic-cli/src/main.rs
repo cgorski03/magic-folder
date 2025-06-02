@@ -1,8 +1,11 @@
 use clap::Parser;
+use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde_json::json;
+use std::env;
 
-const API_BASE_URL: &str = "http://localhost:3030";
+static API_BASE_URL: Lazy<String> =
+    Lazy::new(|| env::var("API_BASE_URL").expect("API_BASE_URL must be set"));
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -41,31 +44,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Process { file } => {
             tracing::info!("Requesting processing for file: {}", file);
             let response = client
-                .post(format!("{}/process_file", API_BASE_URL))
+                .post(format!("{}/process_file", API_BASE_URL.as_str()))
                 .json(&json!({ "file_path": file }))
                 .send()
                 .await?;
 
             if response.status().is_success() {
                 let response_body: serde_json::Value = response.json().await?;
-                println!("Successfully processed file:\n{}", serde_json::to_string_pretty(&response_body)?);
+                println!(
+                    "Successfully processed file:\n{}",
+                    serde_json::to_string_pretty(&response_body)?
+                );
             } else {
-                eprintln!("Error processing file: {} - {}", response.status(), response.text().await?);
+                eprintln!(
+                    "Error processing file: {} - {}",
+                    response.status(),
+                    response.text().await?
+                );
             }
         }
         Commands::Search { query, top_k } => {
             tracing::info!("Searching for: '{}', top_k: {}", query, top_k);
             let response = client
-                .post(format!("{}/search", API_BASE_URL))
+                .post(format!("{}/search", API_BASE_URL.as_str()))
                 .json(&json!({ "query": query, "top_k": top_k }))
                 .send()
                 .await?;
 
             if response.status().is_success() {
                 let search_results: Vec<serde_json::Value> = response.json().await?;
-                println!("Search results:\n{}", serde_json::to_string_pretty(&search_results)?);
+                println!(
+                    "Search results:\n{}",
+                    serde_json::to_string_pretty(&search_results)?
+                );
             } else {
-                eprintln!("Error searching: {} - {}", response.status(), response.text().await?);
+                eprintln!(
+                    "Error searching: {} - {}",
+                    response.status(),
+                    response.text().await?
+                );
             }
         }
     }
