@@ -13,6 +13,7 @@ use std::io::Write;
 use std::sync::Arc;
 use tempfile::tempdir;
 use tokio::net::TcpListener;
+use tracing_subscriber::EnvFilter;
 
 // --- Configuration for Live Ollama Tests ---
 // Ensure these are set in your environment or use defaults.
@@ -20,8 +21,19 @@ use tokio::net::TcpListener;
 const DEFAULT_LIVE_OLLAMA_URL: &str = "http://localhost:11434";
 const LIVE_OLLAMA_EMBEDDING_MODEL: &str = "mxbai-embed-large";
 
+// Setup tracing
+fn setup_test_tracing_subscriber() {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            EnvFilter::new("info,magic_api=trace,magic_core=trace,api_tests=trace")
+        }))
+        .with_test_writer()
+        .try_init();
+}
+
 // Helper to spawn the app with a specific test state, configured for live Ollama
 async fn spawn_app_for_live_ollama_test() -> String {
+    setup_test_tracing_subscriber();
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("Failed to bind random port");
@@ -107,6 +119,7 @@ async fn spawn_app_for_live_ollama_test() -> String {
 #[tokio::test]
 #[ignore = "Integration test: Requires a running Ollama instance with the specified model pulled."]
 async fn test_live_ollama_process_file_endpoint_success() {
+    setup_test_tracing_subscriber();
     let app_address = spawn_app_for_live_ollama_test().await;
     let client = TestClient::new();
 
@@ -153,6 +166,7 @@ async fn test_live_ollama_process_file_endpoint_success() {
 #[tokio::test]
 #[ignore = "Integration test: Requires a running Ollama instance with the specified model pulled."]
 async fn test_live_ollama_search_endpoint_finds_processed_file() {
+    setup_test_tracing_subscriber();
     let app_address = spawn_app_for_live_ollama_test().await;
     let client = TestClient::new();
 
