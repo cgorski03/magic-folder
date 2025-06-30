@@ -31,6 +31,7 @@ find_package(PkgConfig REQUIRED)
 find_package(CURL REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(Threads REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # Optional: Add SQLite3 if you need it
 find_package(unofficial-sqlite3 CONFIG QUIET)

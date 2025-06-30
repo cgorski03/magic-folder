@@ -8,16 +8,20 @@ set(MAGIC_API_SOURCES
 # Create the executable
 add_executable(magic_api ${MAGIC_API_SOURCES})
 
-# Try to find Crow with more explicit configuration
+# Find required packages
 find_package(Crow REQUIRED)
+find_package(OpenSSL REQUIRED)
 
-
+# Link libraries
 target_link_libraries(magic_api
     magic_core
     Crow::Crow
     CURL::libcurl
     nlohmann_json::nlohmann_json
     Threads::Threads
+    ${SQLITE_LIBRARIES}
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
 
 # Compiler flags
