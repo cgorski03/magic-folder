@@ -1,0 +1,16 @@
+{
+  "name": "magic-folder",
+  "version": "0.1.0",
+  "description": "Magic Folder C++ implementation",
+  "dependencies": ["curl", "nlohmann-json", "sqlite3", "crow"],
+  "features": {
+    "crow": {
+      "description": "HTTP server support with Crow",
+      "dependencies": ["crow"]
+    },
+    "testing": {
+      "description": "Testing dependencies",
+      "dependencies": ["gtest"]
+    }
+  }
+}

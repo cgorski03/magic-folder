@@ -1,10 +1,10 @@
-# Magic Folder
+# Magic Folder C++
 
-An intelligent file management system that uses vector embeddings and semantic search to organize and find your files.
+An intelligent file management system that uses vector embeddings and semantic search to organize and find your files, implemented in C++.
 
 ## Overview
 
-Magic Folder is a Rust-based system that automatically processes files, generates embeddings using Ollama, and enables semantic search across your document collection. The project consists of three main components:
+Magic Folder C++ is a C++ implementation of the Magic Folder system that automatically processes files, generates embeddings using Ollama, and enables semantic search across your document collection. The project consists of three main components:
 
 - **magic-core**: Core business logic for file processing, vector storage, and embeddings
 - **magic-api**: REST API server for file processing and semantic search
@@ -12,15 +12,11 @@ Magic Folder is a Rust-based system that automatically processes files, generate
 
 ## Prerequisites
 
-Before testing or running the project, ensure you have:
+Before building or running the project, ensure you have:
 
-1. **Rust**: Install the Rust toolchain (edition 2024)
-
-   ```bash
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   ```
-
-2. **Ollama**: Local Ollama server with the embedding model
+1. **C++20 Compatible Compiler**: GCC 10+, Clang 12+, or MSVC 2019+
+2. **CMake**: Version 3.20 or higher
+3. **Ollama**: Local Ollama server with the embedding model
 
    ```bash
    # Install Ollama
@@ -33,333 +29,247 @@ Before testing or running the project, ensure you have:
    ollama serve
    ```
 
-3. **File System**: The project will automatically create required directories:
-   - `data/` - Vector and metadata storage
-   - `watched_files/` - Directory for test files
+4. **Dependencies**: The following libraries need to be installed:
+   - libcurl (HTTP client)
+   - nlohmann-json (JSON parsing)
+   - sqlite3 (Database)
+   - OpenSSL (Cryptographic functions)
 
-## Quick Start
+## Installation
 
-### 1. Build the Project
+### Ubuntu/Debian
 
 ```bash
-git clone <repository-url>
-cd magic-folder
-cargo build --release
+sudo apt update
+sudo apt install build-essential cmake libcurl4-openssl-dev nlohmann-json3-dev libsqlite3-dev libssl-dev
 ```
 
-### 2. Start the API Server
+### macOS
 
 ```bash
-cargo run --bin magic-api
+# Using Homebrew
+brew install cmake curl nlohmann-json sqlite openssl
+
+# Using MacPorts
+sudo port install cmake curl nlohmann-json sqlite3 openssl
+```
+
+### Windows
+
+```bash
+# Using vcpkg
+vcpkg install curl nlohmann-json sqlite3 openssl
+```
+
+## Building the Project
+
+1. **Clone and navigate to the project**:
+
+   ```bash
+   cd magic-folder-cpp
+   ```
+
+2. **Create build directory**:
+
+   ```bash
+   mkdir build && cd build
+   ```
+
+3. **Configure with CMake**:
+
+   ```bash
+   cmake ..
+   ```
+
+4. **Build the project**:
+
+   ```bash
+   make -j$(nproc)  # Linux/macOS
+   # or
+   cmake --build . --config Release  # Windows
+   ```
+
+5. **Install (optional)**:
+   ```bash
+   sudo make install
+   ```
+
+## Configuration
+
+Create a `.env` file in the project root with the following variables:
+
+```bash
+# API Configuration
+API_BASE_URL=127.0.0.1:3030
+
+# Database Paths
+VECTOR_DB_PATH=./data/vector_db
+METADATA_DB_PATH=./data/metadata.db
+
+# Ollama Configuration
+OLLAMA_URL=http://localhost:11434
+EMBEDDING_MODEL=mxbai-embed-large
+
+# File Watching
+WATCHED_FOLDER=./watched_files
+```
+
+## Usage
+
+### 1. Start the API Server
+
+```bash
+# From the build directory
+./bin/magic_api
 ```
 
 The server will start on `http://localhost:3030`
 
-### 3. Test with CLI Commands
+### 2. Use the CLI
 
-**Process a file:**
-
-```bash
-cargo run --bin magic-cli -- process --file path/to/your/file.txt
-```
-
-**Search for files:**
+**Process a file**:
 
 ```bash
-cargo run --bin magic-cli -- search --query "your search query" --top-k 5
+./bin/magic_cli process --file path/to/your/file.txt
 ```
 
-## Testing Guide
-
-### Manual Testing Workflow
-
-#### 1. Prepare Test Files
-
-Create sample files to test with:
+**Search for files**:
 
 ```bash
-mkdir -p watched_files
-
-# Create test documents
-echo "This is a comprehensive document about machine learning algorithms and neural networks" > watched_files/ml_doc.txt
-echo "A detailed guide to cooking Italian pasta recipes and Mediterranean cuisine" > watched_files/cooking.txt
-echo "Financial report for Q4 2024 including revenue analysis and market trends" > watched_files/finance.txt
-echo "Software development best practices and coding standards for teams" > watched_files/programming.txt
+./bin/magic_cli search --query "your search query" --top-k 5
 ```
 
-#### 2. Start the API Server
-
-In one terminal:
+**List all files**:
 
 ```bash
-cargo run --bin magic-api
+./bin/magic_cli list
 ```
 
-You should see output indicating the server is running on `127.0.0.1:3030`.
-
-#### 3. Process Files
-
-In another terminal, process each test file:
+**Show help**:
 
 ```bash
-# Process test files
-cargo run --bin magic-cli -- process --file watched_files/ml_doc.txt
-cargo run --bin magic-cli -- process --file watched_files/cooking.txt
-cargo run --bin magic-cli -- process --file watched_files/finance.txt
-cargo run --bin magic-cli -- process --file watched_files/programming.txt
+./bin/magic_cli help
 ```
 
-Expected output for successful processing:
+### 3. API Endpoints
 
-```json
-{
-  "message": "File processed successfully",
-  "file_id": 1,
-  "vector_id": "watched_files/ml_doc.txt"
-}
-```
+The API server provides the following REST endpoints:
 
-#### 4. Test Search Functionality
+- `GET /` - Health check
+- `POST /process_file` - Process a file for indexing
+- `POST /search` - Search for files using semantic search
+- `GET /files` - List all indexed files
+- `GET /files/{path}` - Get information about a specific file
+- `DELETE /files/{path}` - Delete a file from the index
 
-Run semantic searches to verify the system works:
-
-```bash
-# Search for machine learning content
-cargo run --bin magic-cli -- search --query "artificial intelligence" --top-k 3
-
-# Search for cooking content
-cargo run --bin magic-cli -- search --query "Italian food recipes" --top-k 3
-
-# Search for financial content
-cargo run --bin magic-cli -- search --query "quarterly earnings" --top-k 3
-
-# Search for programming content
-cargo run --bin magic-cli -- search --query "software engineering practices" --top-k 3
-```
-
-Expected search output:
-
-```json
-[
-  {
-    "path": "watched_files/ml_doc.txt",
-    "score": 0.85
-  }
-]
-```
-
-### API Testing with curl
-
-Test the REST API endpoints directly:
-
-**Health check:**
-
-```bash
-curl http://localhost:3030/
-```
-
-**Process a file:**
-
-```bash
-curl -X POST http://localhost:3030/process_file \
-  -H "Content-Type: application/json" \
-  -d '{"file_path": "watched_files/ml_doc.txt"}'
-```
-
-**Search files:**
-
-```bash
-curl -X POST http://localhost:3030/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "machine learning", "top_k": 5}'
-```
-
-### Debugging and Inspection
-
-#### Inspect Vector Store
-
-Use the built-in inspection tool to verify data storage:
-
-```bash
-cargo run --bin inspect_vector_store
-```
-
-This will display:
-
-- Available tables in the vector database
-- Schema information for the 'files' table
-- Total number of stored embeddings
-
-#### Enable Debug Logging
-
-For detailed logging during development:
-
-```bash
-RUST_LOG=debug cargo run --bin magic-api
-```
-
-#### Check Data Directories
-
-Verify that data is being stored correctly:
-
-```bash
-# Check metadata database
-ls -la data/metadata.sqlite
-
-# Check vector database
-ls -la data/vector_data/
-
-# Check test files
-ls -la watched_files/
-```
-
-## Architecture
-
-### Components
-
-- **Vector Store**: Uses LanceDB for storing high-dimensional embeddings
-- **Metadata Store**: SQLite database for file metadata and relationships
-- **Ollama Client**: Interfaces with local Ollama server for embedding generation
-- **Content Extractor**: Extracts text content from various file formats
-- **File Watcher**: (Planned) Automatic monitoring of file system changes
-
-### Data Flow
-
-1. File is submitted for processing via CLI or API
-2. Text content is extracted from the file
-3. Content is sent to Ollama for embedding generation
-4. Embedding is stored in LanceDB vector store
-5. File metadata is stored in SQLite database
-6. Search queries are embedded and matched against stored vectors
-
-## Testing Checklist
-
-Use this checklist to verify the system is working correctly:
-
-- [ ] Ollama server is running with `mxbai-embed-large` model
-- [ ] Project builds without errors (`cargo build`)
-- [ ] API server starts successfully on port 3030
-- [ ] CLI can process files without errors
-- [ ] Vector embeddings are stored (verify with `inspect_vector_store`)
-- [ ] Search returns relevant results with similarity scores
-- [ ] Metadata is stored in SQLite database (`data/metadata.sqlite`)
-- [ ] API endpoints respond correctly to curl requests
-
-## Troubleshooting
-
-### Common Issues
-
-**Ollama Connection Error**
+## Project Structure
 
 ```
-Error: Connection refused (os error 61)
+magic-folder-cpp/
+├── CMakeLists.txt              # Main CMake configuration
+├── include/                    # Header files
+│   ├── magic_core/            # Core library headers
+│   ├── magic_api/             # API server headers
+│   └── magic_cli/             # CLI headers
+├── src/                       # Source files
+│   ├── magic_core/            # Core library implementation
+│   ├── magic_api/             # API server implementation
+│   └── magic_cli/             # CLI implementation
+├── tests/                     # Test files
+├── third_party/               # Third-party dependencies
+└── build/                     # Build output directory
 ```
 
-- Solution: Ensure Ollama is running on port 11434: `ollama serve`
+## Key Components
 
-**File Not Found Error**
+### magic-core
 
-```
-Error: File not found: path/to/file.txt
-```
+- **OllamaClient**: Handles HTTP requests to Ollama API for embeddings
+- **VectorStore**: Manages vector database operations (placeholder for LanceDB/FAISS)
+- **MetadataStore**: SQLite-based metadata storage for files
+- **ContentExtractor**: Extracts and processes content from various file types
+- **FileWatcher**: Monitors directories for file changes (platform-specific)
 
-- Solution: Use absolute paths or paths relative to the project root
+### magic-api
 
-**Permission Errors**
+- **Server**: HTTP server implementation (placeholder)
+- **Routes**: REST API endpoint handlers
 
-```
-Error: Permission denied
-```
+### magic-cli
 
-- Solution: Ensure the `data/` directory is writable by the current user
+- **CliHandler**: Command-line argument parsing and API communication
 
-**Empty Search Results**
+## Development Status
 
-```
-Search results: []
-```
+This is a work-in-progress C++ migration of the original Rust Magic Folder project. The current implementation includes:
 
-- Solution: Make sure files have been processed first using the `process` command
+✅ **Completed**:
 
-**Model Not Found**
+- Basic project structure and CMake configuration
+- Core component interfaces and basic implementations
+- CLI argument parsing and API communication
+- SQLite metadata storage
+- Content extraction for text files
+- HTTP client implementation using libcurl
 
-```
-Error: Model 'mxbai-embed-large' not found
-```
+🔄 **In Progress**:
 
-- Solution: Pull the model with `ollama pull mxbai-embed-large`
+- Vector database integration (LanceDB/FAISS)
+- HTTP server implementation
+- File watching (platform-specific)
+- PDF content extraction
 
-### Debug Steps
+❌ **Not Yet Implemented**:
 
-1. **Check Ollama Status:**
-
-   ```bash
-   curl http://localhost:11434/api/tags
-   ```
-
-2. **Verify File Processing:**
-
-   ```bash
-   cargo run --bin inspect_vector_store
-   ```
-
-3. **Check Logs:**
-   ```bash
-   RUST_LOG=debug cargo run --bin magic-api
-   ```
-
-## Development
-
-### Adding Tests
-
-Currently, the project lacks formal unit tests. To contribute tests:
-
-1. Add test dependencies to `Cargo.toml`:
-
-   ```toml
-   [dev-dependencies]
-   tokio-test = "0.4"
-   tempfile = "3.0"
-   ```
-
-2. Create test modules:
-
-   ```rust
-   #[cfg(test)]
-   mod tests {
-       use super::*;
-
-       #[tokio::test]
-       async fn test_file_processing() {
-           // Test implementation
-       }
-   }
-   ```
-
-### Running Tests
-
-```bash
-cargo test
-```
-
-## Future Enhancements
-
-- [ ] Automatic file watching and processing
-- [ ] Support for more file formats
-- [ ] Web UI for file management
-- [ ] Integration tests
-- [ ] Performance benchmarks
-- [ ] Docker containerization
-- [ ] Configuration file support
+- Advanced vector similarity search
+- Async operations
+- Comprehensive error handling
+- Unit tests
+- Performance optimizations
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
+3. Make your changes
+4. Add tests if applicable
 5. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Migration Notes
+
+This C++ implementation is a migration from the original Rust project. Key differences:
+
+- **Memory Management**: Uses RAII and smart pointers instead of Rust's ownership system
+- **Error Handling**: Uses exceptions instead of Result types
+- **Async Programming**: Will use std::async or third-party libraries instead of Tokio
+- **Package Management**: Uses CMake and system package managers instead of Cargo
+
+## Troubleshooting
+
+### Common Build Issues
+
+1. **Missing dependencies**: Ensure all required libraries are installed
+2. **CMake version**: Update to CMake 3.20 or higher
+3. **Compiler version**: Use a C++20 compatible compiler
+
+### Runtime Issues
+
+1. **Ollama not running**: Start Ollama server with `ollama serve`
+2. **Port conflicts**: Change API_BASE_URL in .env file
+3. **Permission errors**: Ensure write permissions for data directories
+
+## Future Enhancements
+
+- [ ] Implement actual vector database (LanceDB C++ SDK or FAISS)
+- [ ] Add comprehensive HTTP server (cpp-httplib or Crow)
+- [ ] Implement platform-specific file watching
+- [ ] Add PDF content extraction
+- [ ] Implement async operations
+- [ ] Add comprehensive test suite
+- [ ] Performance optimizations
+- [ ] Docker containerization
+- [ ] CI/CD pipeline
