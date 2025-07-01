@@ -2,7 +2,6 @@
 set(MAGIC_CORE_SOURCES
     ollama_client.cpp
     metadata_store.cpp
-    vector_store.cpp
     file_watcher.cpp
     content_extractor.cpp
 )

@@ -1,17 +1,15 @@
-#include "magic_api/server.hpp"
-#include "magic_api/routes.hpp"
-#include "magic_core/ollama_client.hpp"
-#include "magic_core/vector_store.hpp"
-#include "magic_core/metadata_store.hpp"
-#include "magic_core/content_extractor.hpp"
+#include <cstdlib>
 #include <iostream>
 #include <memory>
-#include <cstdlib>
 
-int main()
-{
-  try
-  {
+#include "magic_api/routes.hpp"
+#include "magic_api/server.hpp"
+#include "magic_core/content_extractor.hpp"
+#include "magic_core/metadata_store.hpp"
+#include "magic_core/ollama_client.hpp"
+
+int main() {
+  try {
     // Get configuration from environment variables
     const char *api_base_url = std::getenv("API_BASE_URL");
     const char *vector_db_path = std::getenv("VECTOR_DB_PATH");
@@ -41,8 +39,7 @@ int main()
 
     // Parse server URL
     size_t colon_pos = server_url.find(':');
-    if (colon_pos == std::string::npos)
-    {
+    if (colon_pos == std::string::npos) {
       std::cerr << "Invalid server URL format. Expected host:port" << std::endl;
       return 1;
     }
@@ -61,9 +58,7 @@ int main()
 
     // Start the server
     server.start();
-  }
-  catch (const std::exception &e)
-  {
+  } catch (const std::exception &e) {
     std::cerr << "Error starting server: " << e.what() << std::endl;
     return 1;
   }

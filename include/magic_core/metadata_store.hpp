@@ -1,5 +1,10 @@
 #pragma once
 
+#include <faiss/Index.h>
+#include <faiss/IndexFlat.h>
+#include <faiss/IndexHNSW.h>
+// Why is this file named with a different convention
+#include <faiss/index_io.h>
 #include <sqlite3.h>
 
 #include <chrono>
@@ -8,11 +13,6 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
-
-// Faiss includes
-#include <faiss/Index.h>
-#include <faiss/index_hnsw.h>  // For the HNSW index type we'll use
-#include <faiss/index_io.h>    // For optional future index serialization/deserialization if needed
 
 namespace magic_core {
 
