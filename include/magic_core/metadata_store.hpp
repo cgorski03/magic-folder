@@ -1,85 +1,117 @@
 #pragma once
 
+#include <sqlite3.h>
+
+#include <chrono>
+#include <filesystem>
+#include <memory>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
-#include <memory>
-#include <filesystem>
-#include <chrono>
-#include <sqlite3.h>
-#include <nlohmann/json.hpp>
 
-namespace magic_core
-{
+// Faiss includes
+#include <faiss/Index.h>
+#include <faiss/index_hnsw.h>  // For the HNSW index type we'll use
+#include <faiss/index_io.h>    // For optional future index serialization/deserialization if needed
 
-  struct FileMetadata
-  {
-    int id;
-    std::string path;
-    std::string content_hash;
-    std::chrono::system_clock::time_point last_modified;
-    std::chrono::system_clock::time_point created_at;
-    std::string file_type;
-    size_t file_size;
-  };
+namespace magic_core {
 
-  class MetadataStoreError : public std::exception
-  {
-  public:
-    explicit MetadataStoreError(const std::string &message) : message_(message) {}
+struct FileMetadata {
+  int id = 0;  // Initialize id to avoid uninitialized value warnings
+  std::string path;
+  std::string content_hash;
+  std::chrono::system_clock::time_point last_modified;
+  std::chrono::system_clock::time_point created_at;
+  std::string file_type;
+  size_t file_size = 0;                 // Initialize file_size
+  std::vector<float> vector_embedding;  // NEW: Field to store the vector embedding
+};
 
-    const char *what() const noexcept override
-    {
-      return message_.c_str();
-    }
+// NEW: Struct for search results
+struct SearchResult {
+  int id;
+  float distance;
+  std::string path;  // Include path directly for convenience in results
+  // You could also add other relevant metadata fields here if desired,
+  // or return the full FileMetadata object if that suits your needs better.
+};
 
-  private:
-    std::string message_;
-  };
+class MetadataStoreError : public std::exception {
+ public:
+  explicit MetadataStoreError(const std::string &message) : message_(message) {}
 
-  class MetadataStore
-  {
-  public:
-    explicit MetadataStore(const std::filesystem::path &db_path);
-    ~MetadataStore();
+  const char *what() const noexcept override {
+    return message_.c_str();
+  }
 
-    // Disable copy constructor and assignment
-    MetadataStore(const MetadataStore &) = delete;
-    MetadataStore &operator=(const MetadataStore &) = delete;
+ private:
+  std::string message_;
+};
 
-    // Allow move constructor and assignment
-    MetadataStore(MetadataStore &&) noexcept;
-    MetadataStore &operator=(MetadataStore &&) noexcept;
+class MetadataStore {
+ public:
+  explicit MetadataStore(const std::filesystem::path &db_path);
+  ~MetadataStore();
 
-    // Initialize the database
-    void initialize();
+  // Disable copy constructor and assignment
+  MetadataStore(const MetadataStore &) = delete;
+  MetadataStore &operator=(const MetadataStore &) = delete;
 
-    // Add or update file metadata
-    void upsert_file_metadata(const FileMetadata &metadata);
+  // Allow move constructor and assignment
+  MetadataStore(MetadataStore &&) noexcept;
+  MetadataStore &operator=(MetadataStore &&) noexcept;
 
-    // Get file metadata by path
-    std::optional<FileMetadata> get_file_metadata(const std::string &path);
+  // Initialize the database and build the Faiss index
+  void initialize();
 
-    // Get file metadata by ID
-    std::optional<FileMetadata> get_file_metadata(int id);
+  // Add or update file metadata (now including vector embedding)
+  void upsert_file_metadata(const FileMetadata &metadata);
 
-    // Delete file metadata
-    void delete_file_metadata(const std::string &path);
+  // Get file metadata by path
+  std::optional<FileMetadata> get_file_metadata(const std::string &path);
 
-    // List all files
-    std::vector<FileMetadata> list_all_files();
+  // Get file metadata by ID (Faiss returns IDs, so this is crucial)
+  std::optional<FileMetadata> get_file_metadata(int id);
 
-    // Check if file exists
-    bool file_exists(const std::string &path);
+  // Delete file metadata
+  void delete_file_metadata(const std::string &path);
 
-  private:
-    std::filesystem::path db_path_;
-    sqlite3 *db_;
+  // List all files
+  std::vector<FileMetadata> list_all_files();
 
-    // Helper methods
-    void create_tables();
-    void execute_sql(const std::string &sql);
-    std::string compute_content_hash(const std::filesystem::path &file_path);
-    std::chrono::system_clock::time_point get_file_last_modified(const std::filesystem::path &file_path);
-  };
+  // Check if file exists
+  bool file_exists(const std::string &path);
 
-} // namespace magic_core
+  // NEW: Perform a vector similarity search
+  std::vector<SearchResult> search_similar_files(const std::vector<float> &query_vector, int k);
+
+  // NEW: Rebuild the in-memory Faiss index from the database
+  // Call this on startup, and optionally after bulk changes/deletions
+  void rebuild_faiss_index();
+
+ private:
+  std::filesystem::path db_path_;
+  sqlite3 *db_;
+
+  faiss::IndexHNSWFlat *faiss_index_;  // NEW: In-memory Faiss index
+
+  // NEW: Faiss Index Parameters (make these class members for easier config)
+  // You'll need to set VECTOR_DIMENSION based on your embedding model
+  const int VECTOR_DIMENSION = 768;            // Example: Common dimension for many models
+  const int HNSW_M_PARAM = 32;                 // HNSW 'M' parameter (number of neighbors in graph)
+  const int HNSW_EF_CONSTRUCTION_PARAM = 100;  // HNSW 'efConstruction' (build quality vs speed)
+
+  // Helper methods
+  void create_tables();
+  void execute_sql(const std::string &sql);
+  std::string compute_content_hash(const std::filesystem::path &file_path);
+  std::chrono::system_clock::time_point get_file_last_modified(
+      const std::filesystem::path &file_path);
+
+  // NEW: Helper for converting time_point to string (existing, but made private helper)
+  std::string time_point_to_string(const std::chrono::system_clock::time_point &tp);
+  // NEW: Helper for converting string back to time_point
+  std::chrono::system_clock::time_point string_to_time_point(const std::string &time_str);
+};
+
+}  // namespace magic_core

@@ -7,14 +7,16 @@ set(MAGIC_CORE_SOURCES
     content_extractor.cpp
 )
 
+find_package(unofficial-sqlite3 CONFIG REQUIRED)
 # Create the library
 add_library(magic_core STATIC ${MAGIC_CORE_SOURCES})
-
 # Link libraries
 target_link_libraries(magic_core
     CURL::libcurl
     nlohmann_json::nlohmann_json
     Threads::Threads
+    faiss
+    unofficial::sqlite3::sqlite3
 )
 
 # Include directories

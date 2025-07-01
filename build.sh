@@ -21,13 +21,21 @@ if [ ! -d "build" ]; then
     mkdir build
 fi
 
+EXTRA_CMAKE_ARGS=""
+# Check if the operating system is macOS (Darwin kernel)
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    echo "macOS detected. Adding vcpkg arguments to allow unsupported builds (for Faiss)."
+    # This sets a CMake variable that is passed to the vcpkg toolchain script.
+    EXTRA_CMAKE_ARGS="-DVCPKG_INSTALL_OPTIONS=--allow-unsupported"
+fi
+
 # Navigate to build directory
 cd build
 
 # Configure with CMake
 echo "Configuring with CMake..."
 if [ -n "$VCPKG_ROOT" ]; then
-    cmake -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" ..
+    cmake -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" $EXTRA_CMAKE_ARGS ..
 else
     cmake ..
 fi

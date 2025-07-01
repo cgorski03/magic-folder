@@ -32,16 +32,8 @@ find_package(CURL REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(faiss CONFIG REQUIRED)
 
-# Optional: Add SQLite3 if you need it
-find_package(unofficial-sqlite3 CONFIG QUIET)
-if(unofficial-sqlite3_FOUND)
-    # vcpkg sqlite3
-    set(SQLITE_LIBRARIES unofficial::sqlite3::sqlite3)
-else()
-    find_package(SQLite3 REQUIRED)
-    set(SQLITE_LIBRARIES SQLite::SQLite3)
-endif()
 
 # Add subdirectories
 add_subdirectory(src/magic_core)
