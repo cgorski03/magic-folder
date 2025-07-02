@@ -58,9 +58,9 @@ crow::response Routes::handle_process_file(const crow::request &req) {
   try {
     std::string file_path = extract_file_path_from_request(req);
     std::cout << "Processing file: " << file_path << std::endl;
-
+    // TODO: Implement actual file processing
     nlohmann::json response = create_success_response("File processed successfully");
-    response["file_id"] = 1;  // TODO: Get actual file ID
+    response["file_id"] = 1;
     response["vector_id"] = file_path;
 
     return create_json_response(response);
@@ -69,6 +69,7 @@ crow::response Routes::handle_process_file(const crow::request &req) {
     return create_json_response(error_response, 400);
   }
 }
+
 // handlers have a lot to do
 crow::response Routes::handle_search(const crow::request &req) {
   try {
@@ -109,8 +110,8 @@ crow::response Routes::handle_get_file_info(const crow::request &req, const std:
 
     nlohmann::json file_info;
     file_info["path"] = path;
-    file_info["size"] = 1024;    // TODO: Get actual file size
-    file_info["type"] = "text";  // TODO: Get actual file type
+    file_info["size"] = 1024;
+    file_info["type"] = "text";
 
     return create_json_response(file_info);
   } catch (const std::exception &e) {
@@ -174,4 +175,4 @@ int Routes::extract_top_k_from_request(const crow::request &req) {
   auto json_body = parse_json_body(req.body);
   return json_body.value("top_k", 10);
 }
-}  // namespace magic_api
+}

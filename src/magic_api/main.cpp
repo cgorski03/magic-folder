@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 
+#include "magic_api/config.hpp"
 #include "magic_api/routes.hpp"
 #include "magic_api/server.hpp"
 #include "magic_core/content_extractor.hpp"
@@ -10,17 +11,12 @@
 
 int main() {
   try {
-    // Get configuration from environment variables
-    const char *api_base_url = std::getenv("API_BASE_URL");
-    const char *metadata_db_path = std::getenv("METADATA_DB_PATH");
-    const char *ollama_url = std::getenv("OLLAMA_URL");
-    const char *embedding_model = std::getenv("EMBEDDING_MODEL");
+    Config config = Config::from_environment();
 
-    // Set defaults if not provided
-    std::string server_url = api_base_url ? api_base_url : "127.0.0.1:3030";
-    std::string metadata_path = metadata_db_path ? metadata_db_path : "./data/metadata.db";
-    std::string ollama_server_url = ollama_url ? ollama_url : "http://localhost:11434";
-    std::string model = embedding_model ? embedding_model : "mxbai-embed-large";
+    std::string server_url = config.api_base_url;
+    std::string metadata_path = config.metadata_db_path;
+    std::string ollama_server_url = config.ollama_url;
+    std::string model = config.embedding_model;
 
     std::cout << "Starting Magic Folder API Server..." << std::endl;
     std::cout << "Server URL: " << server_url << std::endl;

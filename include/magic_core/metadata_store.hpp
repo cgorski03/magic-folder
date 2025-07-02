@@ -82,24 +82,22 @@ class MetadataStore {
   // Check if file exists
   bool file_exists(const std::string &path);
 
-  // NEW: Perform a vector similarity search
   std::vector<SearchResult> search_similar_files(const std::vector<float> &query_vector, int k);
 
-  // NEW: Rebuild the in-memory Faiss index from the database
-  // Call this on startup, and optionally after bulk changes/deletions
   void rebuild_faiss_index();
 
  private:
   std::filesystem::path db_path_;
   sqlite3 *db_;
 
-  faiss::IndexHNSWFlat *faiss_index_;  // NEW: In-memory Faiss index
+  // In-memory Faiss index
+  faiss::IndexHNSWFlat *faiss_index_;
 
-  // NEW: Faiss Index Parameters (make these class members for easier config)
-  // You'll need to set VECTOR_DIMENSION based on your embedding model
-  const int VECTOR_DIMENSION = 768;            // Example: Common dimension for many models
-  const int HNSW_M_PARAM = 32;                 // HNSW 'M' parameter (number of neighbors in graph)
-  const int HNSW_EF_CONSTRUCTION_PARAM = 100;  // HNSW 'efConstruction' (build quality vs speed)
+  // Faiss Index Parameters - since we will support multiple embedding models, these will have to be
+  // able to change
+  const int VECTOR_DIMENSION = 768;
+  const int HNSW_M_PARAM = 32;
+  const int HNSW_EF_CONSTRUCTION_PARAM = 100;
 
   // Helper methods
   void create_tables();
@@ -107,11 +105,8 @@ class MetadataStore {
   std::string compute_content_hash(const std::filesystem::path &file_path);
   std::chrono::system_clock::time_point get_file_last_modified(
       const std::filesystem::path &file_path);
-
-  // NEW: Helper for converting time_point to string (existing, but made private helper)
+  // Time point conversions
   std::string time_point_to_string(const std::chrono::system_clock::time_point &tp);
-  // NEW: Helper for converting string back to time_point
   std::chrono::system_clock::time_point string_to_time_point(const std::string &time_str);
 };
-
 }  // namespace magic_core

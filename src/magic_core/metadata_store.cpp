@@ -49,8 +49,8 @@ MetadataStore::MetadataStore(const std::filesystem::path &db_path)
 }
 
 MetadataStore::~MetadataStore() {
-  if (faiss_index_)  // Clean up Faiss index
-  {
+  if (faiss_index_) {
+    // Clean up faiss index in memory
     delete faiss_index_;
   }
   if (db_) {
@@ -64,13 +64,14 @@ MetadataStore::MetadataStore(MetadataStore &&other) noexcept
       faiss_index_(other.faiss_index_)  // Move faiss_index_
 {
   other.db_ = nullptr;
-  other.faiss_index_ = nullptr;  // Nullify other's faiss_index_
+  // Nullify other's faiss_index_
+  other.faiss_index_ = nullptr;
 }
 
 MetadataStore &MetadataStore::operator=(MetadataStore &&other) noexcept {
   if (this != &other) {
-    if (faiss_index_)  // Clean up current faiss_index_
-    {
+    if (faiss_index_) {
+      // Clean up current faiss index in memory
       delete faiss_index_;
     }
     if (db_) {
@@ -96,7 +97,8 @@ void MetadataStore::initialize() {
   }
 
   create_tables();
-  rebuild_faiss_index();  // Build index on startup
+  // Always need to build the faiss index on startup
+  rebuild_faiss_index();
 }
 
 void MetadataStore::create_tables() {
@@ -437,7 +439,6 @@ std::vector<SearchResult> MetadataStore::search_similar_files(
     const std::vector<float> &query_vector, int k) {
   if (!faiss_index_ || faiss_index_->ntotal == 0) {
     // If the index is empty or not built, we can't search.
-    // We might not want this to trhow in the future
     throw MetadataStoreError("Faiss index not initialized or empty. Cannot perform search.");
   }
 
