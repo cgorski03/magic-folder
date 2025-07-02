@@ -12,28 +12,24 @@ int main() {
   try {
     // Get configuration from environment variables
     const char *api_base_url = std::getenv("API_BASE_URL");
-    const char *vector_db_path = std::getenv("VECTOR_DB_PATH");
     const char *metadata_db_path = std::getenv("METADATA_DB_PATH");
     const char *ollama_url = std::getenv("OLLAMA_URL");
     const char *embedding_model = std::getenv("EMBEDDING_MODEL");
 
     // Set defaults if not provided
     std::string server_url = api_base_url ? api_base_url : "127.0.0.1:3030";
-    std::string vector_path = vector_db_path ? vector_db_path : "./data/vector_db";
     std::string metadata_path = metadata_db_path ? metadata_db_path : "./data/metadata.db";
     std::string ollama_server_url = ollama_url ? ollama_url : "http://localhost:11434";
     std::string model = embedding_model ? embedding_model : "mxbai-embed-large";
 
     std::cout << "Starting Magic Folder API Server..." << std::endl;
     std::cout << "Server URL: " << server_url << std::endl;
-    std::cout << "Vector DB Path: " << vector_path << std::endl;
     std::cout << "Metadata DB Path: " << metadata_path << std::endl;
     std::cout << "Ollama URL: " << ollama_server_url << std::endl;
     std::cout << "Embedding Model: " << model << std::endl;
 
     // Initialize core components
     auto ollama_client = std::make_shared<magic_core::OllamaClient>(ollama_server_url, model);
-    auto vector_store = std::make_shared<magic_core::VectorStore>(vector_path, "files");
     auto metadata_store = std::make_shared<magic_core::MetadataStore>(metadata_path);
     auto content_extractor = std::make_shared<magic_core::ContentExtractor>();
 
@@ -51,7 +47,7 @@ int main() {
     magic_api::Server server(host, port);
 
     // Create routes and register them
-    magic_api::Routes routes(ollama_client, vector_store, metadata_store, content_extractor);
+    magic_api::Routes routes(ollama_client, metadata_store, content_extractor);
     routes.register_routes(server);
 
     std::cout << "Server configured successfully. Starting..." << std::endl;

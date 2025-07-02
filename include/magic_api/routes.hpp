@@ -6,7 +6,6 @@
 
 namespace magic_core {
 class OllamaClient;
-class VectorStore;
 class MetadataStore;
 class ContentExtractor;
 }  // namespace magic_core
@@ -16,7 +15,6 @@ namespace magic_api {
 class Routes {
  public:
   Routes(std::shared_ptr<magic_core::OllamaClient> ollama_client,
-         std::shared_ptr<magic_core::VectorStore> vector_store,
          std::shared_ptr<magic_core::MetadataStore> metadata_store,
          std::shared_ptr<magic_core::ContentExtractor> content_extractor);
   ~Routes() = default;
@@ -34,7 +32,6 @@ class Routes {
 
  private:
   std::shared_ptr<magic_core::OllamaClient> ollama_client_;
-  std::shared_ptr<magic_core::VectorStore> vector_store_;
   std::shared_ptr<magic_core::MetadataStore> metadata_store_;
   std::shared_ptr<magic_core::ContentExtractor> content_extractor_;
 

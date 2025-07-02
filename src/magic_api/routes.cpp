@@ -5,11 +5,9 @@
 
 namespace magic_api {
 Routes::Routes(std::shared_ptr<magic_core::OllamaClient> ollama_client,
-               std::shared_ptr<magic_core::VectorStore> vector_store,
                std::shared_ptr<magic_core::MetadataStore> metadata_store,
                std::shared_ptr<magic_core::ContentExtractor> content_extractor)
     : ollama_client_(ollama_client),
-      vector_store_(vector_store),
       metadata_store_(metadata_store),
       content_extractor_(content_extractor) {}
 
