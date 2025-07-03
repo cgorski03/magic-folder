@@ -39,6 +39,7 @@ find_package(faiss CONFIG REQUIRED)
 add_subdirectory(src/magic_core)
 add_subdirectory(src/magic_api)
 add_subdirectory(src/magic_cli)
+add_subdirectory(src/magic_services)
 
 # Enable testing
 enable_testing()
