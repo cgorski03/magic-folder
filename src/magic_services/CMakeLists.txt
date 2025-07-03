@@ -1,9 +1,7 @@
 # Magic Services static library
 set(MAGIC_SERVICES_SOURCES
-    file_service.cpp
-    search_service.cpp
-    background/file_watcher_service.cpp
-    background/index_maintenance_service.cpp
+    file_delete_service.cpp
+    file_info_service.cpp
 )
 
 add_library(magic_services STATIC ${MAGIC_SERVICES_SOURCES})

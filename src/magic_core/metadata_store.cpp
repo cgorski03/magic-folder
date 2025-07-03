@@ -3,7 +3,7 @@
 #include <faiss/Index.h>
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexHNSW.h>
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 
 #include <fstream>
 #include <iomanip>
@@ -35,9 +35,7 @@ std::chrono::system_clock::time_point MetadataStore::string_to_time_point(
   // working with UTC/GMT internally is safer. std::put_time uses std::tm.
   // For direct conversion from string to system_clock::time_point without timezone issues:
   // This is a common pain point in C++. For simplicity for local desktop app, we'll
-  // just convert to time_t and back. If strict UTC is needed across timezones, consider
-  // a more robust date/time library or storing Unix timestamps.
-  return std::chrono::system_clock::from_time_t(std::mktime(&tm_struct));
+  return std::chrono::system_clock::from_time_t(timegm(&tm_struct));
 }
 
 MetadataStore::MetadataStore(const std::filesystem::path &db_path)
@@ -111,7 +109,7 @@ void MetadataStore::create_tables() {
             created_at TEXT NOT NULL,
             file_type TEXT NOT NULL,
             file_size INTEGER NOT NULL,
-            vector BLOB           -- NEW: Column for vector embedding
+            vector BLOB
         );
     )";
 
@@ -134,19 +132,36 @@ std::string MetadataStore::compute_content_hash(const std::filesystem::path &fil
     throw MetadataStoreError("Failed to open file for hashing: " + file_path.string());
   }
 
-  SHA256_CTX sha256;
-  SHA256_Init(&sha256);
+  // Use modern EVP API instead of deprecated SHA256_* functions
+  EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+  if (!mdctx) {
+    throw MetadataStoreError("Failed to create EVP context for hashing");
+  }
+
+  if (EVP_DigestInit_ex(mdctx, EVP_sha256(), nullptr) != 1) {
+    EVP_MD_CTX_free(mdctx);
+    throw MetadataStoreError("Failed to initialize SHA256 digest");
+  }
 
   char buffer[1024];
   while (file.read(buffer, sizeof(buffer))) {
-    SHA256_Update(&sha256, buffer, file.gcount());
+    if (EVP_DigestUpdate(mdctx, buffer, file.gcount()) != 1) {
+      EVP_MD_CTX_free(mdctx);
+      throw MetadataStoreError("Failed to update SHA256 digest");
+    }
   }
 
-  unsigned char hash[SHA256_DIGEST_LENGTH];
-  SHA256_Final(hash, &sha256);
+  unsigned char hash[EVP_MAX_MD_SIZE];
+  unsigned int hash_len;
+  if (EVP_DigestFinal_ex(mdctx, hash, &hash_len) != 1) {
+    EVP_MD_CTX_free(mdctx);
+    throw MetadataStoreError("Failed to finalize SHA256 digest");
+  }
+
+  EVP_MD_CTX_free(mdctx);
 
   std::stringstream ss;
-  for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+  for (unsigned int i = 0; i < hash_len; i++) {
     ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
   }
 

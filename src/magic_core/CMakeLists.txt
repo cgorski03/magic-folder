@@ -14,6 +14,8 @@ target_link_libraries(magic_core
     PUBLIC
         faiss
         LAPACK::LAPACK
+        OpenSSL::SSL
+        OpenSSL::Crypto
         "-framework Accelerate"
     PRIVATE
         CURL::libcurl
