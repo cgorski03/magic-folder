@@ -60,7 +60,7 @@ TEST_F(FileInfoServiceTest, ListFiles_ReturnsAllFiles) {
   EXPECT_EQ(result[0].file_type, magic_core::FileType::Text);
   EXPECT_EQ(result[0].file_size, 1024);
 
-  EXPECT_EQ(result[1].path, "/test/file2.jpg");
+  EXPECT_EQ(result[1].path, "/test/file2.md");
   EXPECT_EQ(result[1].content_hash, "def456");
   EXPECT_EQ(result[1].file_type, magic_core::FileType::Markdown);
   EXPECT_EQ(result[1].file_size, 2048);
@@ -69,7 +69,7 @@ TEST_F(FileInfoServiceTest, ListFiles_ReturnsAllFiles) {
 TEST_F(FileInfoServiceTest, ListFiles_ReturnsEmptyWhenNoFiles) {
   // Arrange - clear all test data
   metadata_store_->delete_file_metadata("/test/file1.txt");
-  metadata_store_->delete_file_metadata("/test/file2.jpg");
+  metadata_store_->delete_file_metadata("/test/file2.md");
 
   // Act
   auto result = file_info_service_->list_files();
@@ -229,9 +229,9 @@ TEST_F(FileInfoServiceTest, ListFiles_HandlesLargeDataset) {
     paths.insert(file.path);
   }
 
-  EXPECT_EQ(paths.size(), 102);  // All paths should be unique
+  EXPECT_EQ(paths.size(), 102);
   EXPECT_NE(paths.find("/test/file1.txt"), paths.end());
-  EXPECT_NE(paths.find("/test/file2.jpg"), paths.end());
+  EXPECT_NE(paths.find("/test/file2.md"), paths.end());
   EXPECT_NE(paths.find("/test/large_dataset/file0.txt"), paths.end());
   EXPECT_NE(paths.find("/test/large_dataset/file99.txt"), paths.end());
 }
