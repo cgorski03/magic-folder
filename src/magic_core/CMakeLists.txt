@@ -4,6 +4,7 @@ set(MAGIC_CORE_SOURCES
     metadata_store.cpp
     file_watcher.cpp
     content_extractor.cpp
+    types.cpp
 )
 
 find_package(unofficial-sqlite3 CONFIG REQUIRED)

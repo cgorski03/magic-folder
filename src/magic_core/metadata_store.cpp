@@ -148,7 +148,7 @@ void MetadataStore::upsert_file_metadata(const FileMetadata &metadata) {
   sqlite3_bind_text(stmt, 2, metadata.content_hash.c_str(), -1, SQLITE_STATIC);
   sqlite3_bind_text(stmt, 3, last_modified_str.c_str(), -1, SQLITE_STATIC);
   sqlite3_bind_text(stmt, 4, created_at_str.c_str(), -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 5, metadata.file_type.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 5, to_string(metadata.file_type).c_str(), -1, SQLITE_STATIC);
   sqlite3_bind_int64(stmt, 6, metadata.file_size);
 
   // Bind vector as BLOB
@@ -196,7 +196,8 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &
         string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
     metadata.created_at =
         string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4)));
-    metadata.file_type = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5));
+    metadata.file_type =
+        file_type_from_string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5)));
     metadata.file_size = sqlite3_column_int64(stmt, 6);
 
     const void *vector_blob = sqlite3_column_blob(stmt, 7);
@@ -242,7 +243,8 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(int id) {
         string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
     metadata.created_at =
         string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4)));
-    metadata.file_type = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5));
+    metadata.file_type =
+        file_type_from_string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5)));
     metadata.file_size = sqlite3_column_int64(stmt, 6);
 
     const void *vector_blob = sqlite3_column_blob(stmt, 7);
@@ -292,7 +294,8 @@ std::vector<FileMetadata> MetadataStore::list_all_files() {
         string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
     metadata.created_at =
         string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4)));
-    metadata.file_type = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5));
+    metadata.file_type =
+        file_type_from_string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5)));
     metadata.file_size = sqlite3_column_int64(stmt, 6);
 
     const void *vector_blob = sqlite3_column_blob(stmt, 7);

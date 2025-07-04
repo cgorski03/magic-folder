@@ -24,7 +24,7 @@ class TestUtilities {
   static magic_core::FileMetadata create_test_file_metadata(
       const std::string& path,
       const std::string& content_hash = "default_hash",
-      const std::string& file_type = "text/plain",
+      magic_core::FileType file_type = magic_core::FileType::Text,
       size_t file_size = 1024,
       bool include_vector = false);
 

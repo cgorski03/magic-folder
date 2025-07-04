@@ -31,9 +31,9 @@ class FileInfoServiceTest : public magic_tests::MetadataStoreTestBase {
   void setupTestData() {
     // Create basic test files using utilities
     test_files_.push_back(magic_tests::TestUtilities::create_test_file_metadata(
-        "/test/file1.txt", "abc123", "text/plain", 1024, false));
+        "/test/file1.txt", "abc123", magic_core::FileType::Text, 1024, false));
     test_files_.push_back(magic_tests::TestUtilities::create_test_file_metadata(
-        "/test/file2.jpg", "def456", "image/jpeg", 2048, false));
+        "/test/file2.md", "def456", magic_core::FileType::Markdown, 2048, false));
 
     // Populate the metadata store
     magic_tests::TestUtilities::populate_metadata_store(metadata_store_, test_files_);
@@ -57,12 +57,12 @@ TEST_F(FileInfoServiceTest, ListFiles_ReturnsAllFiles) {
 
   EXPECT_EQ(result[0].path, "/test/file1.txt");
   EXPECT_EQ(result[0].content_hash, "abc123");
-  EXPECT_EQ(result[0].file_type, "text/plain");
+  EXPECT_EQ(result[0].file_type, magic_core::FileType::Text);
   EXPECT_EQ(result[0].file_size, 1024);
 
   EXPECT_EQ(result[1].path, "/test/file2.jpg");
   EXPECT_EQ(result[1].content_hash, "def456");
-  EXPECT_EQ(result[1].file_type, "image/jpeg");
+  EXPECT_EQ(result[1].file_type, magic_core::FileType::Markdown);
   EXPECT_EQ(result[1].file_size, 2048);
 }
 
@@ -81,7 +81,7 @@ TEST_F(FileInfoServiceTest, ListFiles_ReturnsEmptyWhenNoFiles) {
 TEST_F(FileInfoServiceTest, ListFiles_PreservesVectorEmbeddings) {
   // Arrange - Create a file with vector embedding using utilities
   auto file_with_vector = magic_tests::TestUtilities::create_test_file_metadata(
-      "/test/file_with_vector.txt", "vector123", "text/plain", 512, true);
+      "/test/file_with_vector.txt", "vector123", magic_core::FileType::Text, 512, true);
 
   metadata_store_->upsert_file_metadata(file_with_vector);
 
@@ -115,7 +115,7 @@ TEST_F(FileInfoServiceTest, GetFileInfo_ReturnsFileWhenExists) {
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->path, "/test/file1.txt");
   EXPECT_EQ(result->content_hash, "abc123");
-  EXPECT_EQ(result->file_type, "text/plain");
+  EXPECT_EQ(result->file_type, magic_core::FileType::Text);
   EXPECT_EQ(result->file_size, 1024);
 }
 
@@ -133,7 +133,7 @@ TEST_F(FileInfoServiceTest, GetFileInfo_ReturnsNulloptWhenFileNotExists) {
 TEST_F(FileInfoServiceTest, GetFileInfo_HandlesRelativePaths) {
   // Arrange - Add a file with a relative path using utilities
   auto relative_file = magic_tests::TestUtilities::create_test_file_metadata(
-      "relative/path/file.txt", "rel123", "text/plain", 512, false);
+      "relative/path/file.txt", "rel123", magic_core::FileType::Text, 512, false);
 
   metadata_store_->upsert_file_metadata(relative_file);
 
@@ -240,7 +240,7 @@ TEST_F(FileInfoServiceTest, ListFiles_HandlesLargeDataset) {
 TEST_F(FileInfoServiceTest, GetFileInfo_ReflectsUpdates) {
   // Arrange - update an existing file using utilities
   auto updated_file = magic_tests::TestUtilities::create_test_file_metadata(
-      "/test/file1.txt", "updated_hash", "text/plain", 2048, false);
+      "/test/file1.txt", "updated_hash", magic_core::FileType::Text, 2048, false);
 
   metadata_store_->upsert_file_metadata(updated_file);
 
@@ -257,7 +257,7 @@ TEST_F(FileInfoServiceTest, GetFileInfo_ReflectsUpdates) {
 TEST_F(FileInfoServiceTest, GetFileInfo_PreservesVectorEmbedding) {
   // Arrange - Create a file with vector embedding using utilities
   auto file_with_vector = magic_tests::TestUtilities::create_test_file_metadata(
-      "/test/vector_file.txt", "vector456", "text/plain", 1024, true);
+      "/test/vector_file.txt", "vector456", magic_core::FileType::Text, 1024, true);
 
   metadata_store_->upsert_file_metadata(file_with_vector);
 

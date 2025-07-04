@@ -31,7 +31,7 @@ void TestUtilities::cleanup_temp_db(const std::filesystem::path& db_path) {
 
 magic_core::FileMetadata TestUtilities::create_test_file_metadata(const std::string& path,
                                                                   const std::string& content_hash,
-                                                                  const std::string& file_type,
+                                                                  magic_core::FileType file_type,
                                                                   size_t file_size,
                                                                   bool include_vector) {
   magic_core::FileMetadata metadata;
@@ -68,8 +68,8 @@ std::vector<magic_core::FileMetadata> TestUtilities::create_test_dataset(int cou
     std::string path = prefix + "/file" + std::to_string(i) + ".txt";
     std::string hash = "hash" + std::to_string(i);
 
-    dataset.push_back(
-        create_test_file_metadata(path, hash, "text/plain", 1024 + i, include_vectors));
+    dataset.push_back(create_test_file_metadata(path, hash, magic_core::FileType::Text, 1024 + i,
+                                                include_vectors));
   }
 
   return dataset;

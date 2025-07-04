@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "magic_core/metadata_store.hpp"
+#include "magic_core/types.hpp"
 #include "magic_services/file_delete_service.hpp"
 #include "test_utilities.hpp"
 
@@ -26,11 +27,11 @@ class FileDeleteServiceTest : public magic_tests::MetadataStoreTestBase {
   void setupTestData() {
     // Create basic test files using utilities
     test_files_.push_back(magic_tests::TestUtilities::create_test_file_metadata(
-        "/test/file1.txt", "abc123", "text/plain", 1024, false));
+        "/test/file1.txt", "abc123", magic_core::FileType::Text, 1024, false));
     test_files_.push_back(magic_tests::TestUtilities::create_test_file_metadata(
-        "/test/file2.jpg", "def456", "image/jpeg", 2048, false));
+        "/test/file2.md", "def456", magic_core::FileType::Markdown, 2048, false));
     test_files_.push_back(magic_tests::TestUtilities::create_test_file_metadata(
-        "/test/file_with_vector.txt", "vector123", "text/plain", 512, true));
+        "/test/file_with_vector.cpp", "vector123", magic_core::FileType::Code, 512, true));
 
     // Populate the metadata store
     magic_tests::TestUtilities::populate_metadata_store(metadata_store_, test_files_);
@@ -62,7 +63,7 @@ TEST_F(FileDeleteServiceTest, DeleteFile_RemovesFileFromDatabase) {
 TEST_F(FileDeleteServiceTest, DeleteFile_OnlyRemovesSpecifiedFile) {
   // Arrange
   std::filesystem::path delete_path = "/test/file1.txt";
-  std::filesystem::path keep_path = "/test/file2.jpg";
+  std::filesystem::path keep_path = "/test/file2.md";
 
   // Verify both files exist before deletion
   ASSERT_TRUE(metadata_store_->file_exists(delete_path));
@@ -78,15 +79,15 @@ TEST_F(FileDeleteServiceTest, DeleteFile_OnlyRemovesSpecifiedFile) {
   // Verify the kept file still has all its metadata
   auto kept_file = metadata_store_->get_file_metadata(keep_path);
   ASSERT_TRUE(kept_file.has_value());
-  EXPECT_EQ(kept_file->path, "/test/file2.jpg");
+  EXPECT_EQ(kept_file->path, "/test/file2.md");
   EXPECT_EQ(kept_file->content_hash, "def456");
-  EXPECT_EQ(kept_file->file_type, "image/jpeg");
+  EXPECT_EQ(kept_file->file_type, magic_core::FileType::Markdown);
   EXPECT_EQ(kept_file->file_size, 2048);
 }
 
 TEST_F(FileDeleteServiceTest, DeleteFile_HandlesFileWithVectorEmbedding) {
   // Arrange
-  std::filesystem::path test_path = "/test/file_with_vector.txt";
+  std::filesystem::path test_path = "/test/file_with_vector.cpp";
 
   // Verify file exists and has vector embedding before deletion
   ASSERT_TRUE(metadata_store_->file_exists(test_path));
@@ -115,14 +116,14 @@ TEST_F(FileDeleteServiceTest, DeleteFile_HandlesNonExistentFile) {
 
   // Verify other files are still intact
   EXPECT_TRUE(metadata_store_->file_exists("/test/file1.txt"));
-  EXPECT_TRUE(metadata_store_->file_exists("/test/file2.jpg"));
-  EXPECT_TRUE(metadata_store_->file_exists("/test/file_with_vector.txt"));
+  EXPECT_TRUE(metadata_store_->file_exists("/test/file2.md"));
+  EXPECT_TRUE(metadata_store_->file_exists("/test/file_with_vector.cpp"));
 }
 
 TEST_F(FileDeleteServiceTest, DeleteFile_HandlesRelativePaths) {
   // Arrange - Add a file with a relative path
   auto relative_file = magic_tests::TestUtilities::create_test_file_metadata(
-      "relative/path/file.txt", "rel123", "text/plain", 512, false);
+      "relative/path/file.txt", "rel123", magic_core::FileType::Text, 512, false);
   metadata_store_->upsert_file_metadata(relative_file);
 
   std::filesystem::path relative_path = "relative/path/file.txt";
@@ -146,8 +147,8 @@ TEST_F(FileDeleteServiceTest, DeleteFile_HandlesEmptyPath) {
 
   // Verify all existing files are still intact
   EXPECT_TRUE(metadata_store_->file_exists("/test/file1.txt"));
-  EXPECT_TRUE(metadata_store_->file_exists("/test/file2.jpg"));
-  EXPECT_TRUE(metadata_store_->file_exists("/test/file_with_vector.txt"));
+  EXPECT_TRUE(metadata_store_->file_exists("/test/file2.md"));
+  EXPECT_TRUE(metadata_store_->file_exists("/test/file_with_vector.cpp"));
 }
 
 TEST_F(FileDeleteServiceTest, DeleteFile_UpdatesFileCount) {
@@ -171,8 +172,8 @@ TEST_F(FileDeleteServiceTest, DeleteFile_UpdatesFileCount) {
 
 TEST_F(FileDeleteServiceTest, DeleteFile_MultipleConsecutiveDeletions) {
   // Arrange
-  std::vector<std::string> paths_to_delete = {"/test/file1.txt", "/test/file2.jpg",
-                                              "/test/file_with_vector.txt"};
+  std::vector<std::string> paths_to_delete = {"/test/file1.txt", "/test/file2.md",
+                                              "/test/file_with_vector.cpp"};
 
   // Act - Delete all files one by one
   for (const auto& path : paths_to_delete) {
