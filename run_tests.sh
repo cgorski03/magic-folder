@@ -25,40 +25,21 @@ if [ ! -d "build" ]; then
     echo "Creating build directory..."
     mkdir build
 fi
-
-EXTRA_CMAKE_ARGS=""
-# Check if the operating system is macOS (Darwin kernel)
-if [[ "$(uname -s)" == "Darwin" ]]; then
-    echo "macOS detected. Adding vcpkg arguments to allow unsupported builds."
-    EXTRA_CMAKE_ARGS="-DVCPKG_INSTALL_OPTIONS=--allow-unsupported"
-fi
-
 cd build
-
-echo "Installing dependencies with testing feature..."
-"$VCPKG_ROOT/vcpkg" install --feature-flags=manifests,versions --feature testing
-
-echo "Configuring CMake with testing enabled..."
-cmake -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
-      -DCMAKE_BUILD_TYPE=Debug \
-      $EXTRA_CMAKE_ARGS \
-      ..
-
-echo "Building project with tests..."
-make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 echo "Running all tests..."
 if [ -f "bin/magic_folder_tests" ]; then
     echo "Running Magic Folder Test Suite..."
-    ./bin/magic_folder_tests
+    # Enable Google Test colors and verbose output
+    GTEST_COLOR=yes ./bin/magic_folder_tests --gtest_color=yes
     echo ""
     echo "Test run completed successfully!"
     echo ""
     echo "Available test filtering options:"
-    echo "  Run all tests:                   ./bin/magic_folder_tests"
-    echo "  Run FileInfoService tests only:  ./bin/magic_folder_tests --gtest_filter=\"FileInfoServiceTest.*\""
+    echo "  Run all tests:                   GTEST_COLOR=yes ./bin/magic_folder_tests --gtest_color=yes"
+    echo "  Run FileInfoService tests only:  GTEST_COLOR=yes ./bin/magic_folder_tests --gtest_filter=\"FileInfoServiceTest.*\" --gtest_color=yes"
     echo "  List all available tests:        ./bin/magic_folder_tests --gtest_list_tests"
-    echo "  Run with verbose output:         ./bin/magic_folder_tests --gtest_output=verbose"
+    echo "  Run with verbose output:         GTEST_COLOR=yes ./bin/magic_folder_tests --gtest_output=verbose --gtest_color=yes"
 elif command -v ctest &> /dev/null; then
     echo "Using CTest to run tests..."
     ctest --output-on-failure --verbose

@@ -3,7 +3,6 @@
 #include <faiss/Index.h>
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexHNSW.h>
-#include <openssl/evp.h>
 
 #include <fstream>
 #include <iomanip>
@@ -31,18 +30,12 @@ std::chrono::system_clock::time_point MetadataStore::string_to_time_point(
     throw std::runtime_error("Failed to parse time string: " + time_str +
                              ". Expected format YYYY-MM-DD HH:MM:SS.");
   }
-  // mktime expects local time, but we stored as GM time. For consistency and portability,
-  // working with UTC/GMT internally is safer. std::put_time uses std::tm.
-  // For direct conversion from string to system_clock::time_point without timezone issues:
-  // This is a common pain point in C++. For simplicity for local desktop app, we'll
+  // We stored GMT time.
   return std::chrono::system_clock::from_time_t(timegm(&tm_struct));
 }
 
 MetadataStore::MetadataStore(const std::filesystem::path &db_path)
-    : db_path_(db_path),
-      db_(nullptr),
-      faiss_index_(nullptr)  // Initialize faiss_index_
-{
+    : db_path_(db_path), db_(nullptr), faiss_index_(nullptr) {
   initialize();
 }
 
@@ -57,12 +50,8 @@ MetadataStore::~MetadataStore() {
 }
 
 MetadataStore::MetadataStore(MetadataStore &&other) noexcept
-    : db_path_(std::move(other.db_path_)),
-      db_(other.db_),
-      faiss_index_(other.faiss_index_)  // Move faiss_index_
-{
+    : db_path_(std::move(other.db_path_)), db_(other.db_), faiss_index_(other.faiss_index_) {
   other.db_ = nullptr;
-  // Nullify other's faiss_index_
   other.faiss_index_ = nullptr;
 }
 
@@ -77,9 +66,9 @@ MetadataStore &MetadataStore::operator=(MetadataStore &&other) noexcept {
     }
     db_path_ = std::move(other.db_path_);
     db_ = other.db_;
-    faiss_index_ = other.faiss_index_;  // Move faiss_index_
+    faiss_index_ = other.faiss_index_;
     other.db_ = nullptr;
-    other.faiss_index_ = nullptr;  // Nullify other's faiss_index_
+    other.faiss_index_ = nullptr;
   }
   return *this;
 }
@@ -126,53 +115,10 @@ void MetadataStore::execute_sql(const std::string &sql) {
   }
 }
 
-std::string MetadataStore::compute_content_hash(const std::filesystem::path &file_path) {
-  std::ifstream file(file_path, std::ios::binary);
-  if (!file) {
-    throw MetadataStoreError("Failed to open file for hashing: " + file_path.string());
-  }
-
-  // Use modern EVP API instead of deprecated SHA256_* functions
-  EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
-  if (!mdctx) {
-    throw MetadataStoreError("Failed to create EVP context for hashing");
-  }
-
-  if (EVP_DigestInit_ex(mdctx, EVP_sha256(), nullptr) != 1) {
-    EVP_MD_CTX_free(mdctx);
-    throw MetadataStoreError("Failed to initialize SHA256 digest");
-  }
-
-  char buffer[1024];
-  while (file.read(buffer, sizeof(buffer))) {
-    if (EVP_DigestUpdate(mdctx, buffer, file.gcount()) != 1) {
-      EVP_MD_CTX_free(mdctx);
-      throw MetadataStoreError("Failed to update SHA256 digest");
-    }
-  }
-
-  unsigned char hash[EVP_MAX_MD_SIZE];
-  unsigned int hash_len;
-  if (EVP_DigestFinal_ex(mdctx, hash, &hash_len) != 1) {
-    EVP_MD_CTX_free(mdctx);
-    throw MetadataStoreError("Failed to finalize SHA256 digest");
-  }
-
-  EVP_MD_CTX_free(mdctx);
-
-  std::stringstream ss;
-  for (unsigned int i = 0; i < hash_len; i++) {
-    ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
-  }
-
-  return ss.str();
-}
-
 std::chrono::system_clock::time_point MetadataStore::get_file_last_modified(
     const std::filesystem::path &file_path) {
   auto ftime = std::filesystem::last_write_time(file_path);
   // Convert file_time_type to system_clock::time_point
-  // This conversion can be tricky and platform-dependent, but this is a common approach.
   auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
       ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
   return sctp;
@@ -216,7 +162,7 @@ void MetadataStore::upsert_file_metadata(const FileMetadata &metadata) {
     sqlite3_bind_blob(stmt, 7, metadata.vector_embedding.data(),
                       metadata.vector_embedding.size() * sizeof(float), SQLITE_STATIC);
   } else {
-    sqlite3_bind_null(stmt, 7);  // Store NULL if no vector
+    sqlite3_bind_null(stmt, 7);
   }
 
   rc = sqlite3_step(stmt);
@@ -225,8 +171,6 @@ void MetadataStore::upsert_file_metadata(const FileMetadata &metadata) {
     throw MetadataStoreError("Failed to execute statement: " + std::string(sqlite3_errmsg(db_)));
   }
 
-  // After a successful upsert, the in-memory Faiss index is NOT immediately updated.
-  // It will be updated the next time `rebuild_faiss_index()` is called (e.g., on next app start).
   sqlite3_finalize(stmt);
 }
 
@@ -326,6 +270,7 @@ bool MetadataStore::file_exists(const std::string &path) {
   return get_file_metadata(path).has_value();
 }
 
+// TODO: This will probably not be super usable. eventually it should have pagination
 std::vector<FileMetadata> MetadataStore::list_all_files() {
   std::vector<FileMetadata> files;
   std::string sql =
@@ -386,8 +331,6 @@ void MetadataStore::delete_file_metadata(const std::string &path) {
     sqlite3_finalize(stmt);
     throw MetadataStoreError("Failed to execute statement: " + std::string(sqlite3_errmsg(db_)));
   }
-
-  // No immediate Faiss index update on delete. Index is rebuilt on demand.
 
   sqlite3_finalize(stmt);
 }
@@ -501,5 +444,4 @@ std::vector<SearchResult> MetadataStore::search_similar_files(
 
   return results;
 }
-
 }  // namespace magic_core

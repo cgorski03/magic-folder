@@ -14,20 +14,20 @@
 #include <string>
 #include <vector>
 
+#include "magic_core/types.hpp"
 namespace magic_core {
 
 struct FileMetadata {
-  int id = 0;  // Initialize id to avoid uninitialized value warnings
+  int id = 0;
   std::string path;
   std::string content_hash;
   std::chrono::system_clock::time_point last_modified;
   std::chrono::system_clock::time_point created_at;
-  std::string file_type;
-  size_t file_size = 0;                 // Initialize file_size
-  std::vector<float> vector_embedding;  // NEW: Field to store the vector embedding
+  FileType file_type;
+  size_t file_size = 0;
+  std::vector<float> vector_embedding;
 };
 
-// NEW: Struct for search results
 struct SearchResult {
   int id;
   float distance;
@@ -86,6 +86,8 @@ class MetadataStore {
 
   void rebuild_faiss_index();
 
+  std::string compute_content_hash(const std::filesystem::path &file_path);
+
  private:
   std::filesystem::path db_path_;
   sqlite3 *db_;
@@ -102,7 +104,6 @@ class MetadataStore {
   // Helper methods
   void create_tables();
   void execute_sql(const std::string &sql);
-  std::string compute_content_hash(const std::filesystem::path &file_path);
   std::chrono::system_clock::time_point get_file_last_modified(
       const std::filesystem::path &file_path);
   // Time point conversions

@@ -23,4 +23,4 @@ class FileProcessingService {
   std::shared_ptr<magic_core::OllamaClient> ollama_client_;
 };
 
-}  // namespace magic_services
+}
