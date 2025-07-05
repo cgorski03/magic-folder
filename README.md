@@ -1,6 +1,6 @@
 # Magic Folder C++
 
-An intelligent file management system that uses vector embeddings and semantic search to organize and find your files, implemented in C++.
+An intelligent file management system that uses AI to organize and classify your files, with uncompromising focus on privacy and performance.
 
 ## Overview
 
