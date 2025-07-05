@@ -38,6 +38,8 @@ if [ -f "bin/magic_folder_tests" ]; then
     echo "Available test filtering options:"
     echo "  Run all tests:                   GTEST_COLOR=yes ./bin/magic_folder_tests --gtest_color=yes"
     echo "  Run FileInfoService tests only:  GTEST_COLOR=yes ./bin/magic_folder_tests --gtest_filter=\"FileInfoServiceTest.*\" --gtest_color=yes"
+    echo "  Run FileDeleteService tests only: GTEST_COLOR=yes ./bin/magic_folder_tests --gtest_filter=\"FileDeleteServiceTest.*\" --gtest_color=yes"
+    echo "  Run FileProcessingService tests only: GTEST_COLOR=yes ./bin/magic_folder_tests --gtest_filter=\"FileProcessingServiceTest.*\" --gtest_color=yes"
     echo "  List all available tests:        ./bin/magic_folder_tests --gtest_list_tests"
     echo "  Run with verbose output:         GTEST_COLOR=yes ./bin/magic_folder_tests --gtest_output=verbose --gtest_color=yes"
 elif command -v ctest &> /dev/null; then

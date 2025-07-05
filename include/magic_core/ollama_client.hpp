@@ -35,7 +35,7 @@ class OllamaClient {
   OllamaClient &operator=(OllamaClient &&) noexcept;
 
   // Get embedding for text
-  std::vector<float> get_embedding(const std::string &text);
+  virtual std::vector<float> get_embedding(const std::string &text);
 
  private:
   std::string ollama_url_;
