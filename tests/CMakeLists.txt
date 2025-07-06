@@ -10,10 +10,10 @@ set(TEST_SOURCES
     test_utilities.cpp
     test_file_info_service.cpp
     test_file_delete_service.cpp
+    test_file_processing_service.cpp
     # Add future test files here:
     # test_metadata_store.cpp
     # test_search_service.cpp
-    # test_file_processing_service.cpp
 )
 
 # Create single test executable for all tests
@@ -54,6 +54,12 @@ add_custom_target(test_file_delete_service
     COMMAND magic_folder_tests --gtest_filter="FileDeleteServiceTest.*"
     DEPENDS magic_folder_tests
     COMMENT "Running FileDeleteService tests only"
+)
+
+add_custom_target(test_file_processing_service
+    COMMAND magic_folder_tests --gtest_filter="FileProcessingServiceTest.*"
+    DEPENDS magic_folder_tests
+    COMMENT "Running FileProcessingService tests only"
 )
 
 # Add more specific test targets as you add more test files:

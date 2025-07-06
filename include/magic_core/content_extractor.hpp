@@ -16,7 +16,6 @@ struct ExtractedContent {
   std::vector<std::string> keywords;
   FileType file_type;
   size_t word_count;
-  std::string language;  // For code files
   std::string content_hash;
 };
 
@@ -46,19 +45,20 @@ class ContentExtractor {
   ContentExtractor &operator=(ContentExtractor &&) noexcept;
 
   // Extract content from file
-  ExtractedContent extract_content(const std::filesystem::path &file_path);
+  virtual ExtractedContent extract_content(const std::filesystem::path &file_path);
 
   // Extract content from text
-  ExtractedContent extract_from_text(const std::string &text, const std::string &filename = "");
+  virtual ExtractedContent extract_from_text(const std::string &text,
+                                             const std::string &filename = "");
 
   // Detect file type
-  FileType detect_file_type(const std::filesystem::path &file_path);
+  virtual FileType detect_file_type(const std::filesystem::path &file_path);
 
   // Check if file type is supported
-  bool is_supported_file_type(const std::filesystem::path &file_path);
+  virtual bool is_supported_file_type(const std::filesystem::path &file_path);
 
   // Get supported file extensions
-  std::vector<std::string> get_supported_extensions() const;
+  virtual std::vector<std::string> get_supported_extensions() const;
 
  private:
   // File type handlers

@@ -59,11 +59,13 @@ ExtractedContent ContentExtractor::extract_from_text(const std::string &text,
   content.keywords = extract_keywords(text);
   content.file_type = FileType::Text;
   content.word_count = count_words(text);
-  content.language = "";
 
   return content;
 }
 
+/*TODO
+ * This needs to be a regex
+ */
 FileType ContentExtractor::detect_file_type(const std::filesystem::path &file_path) {
   std::string extension = file_path.extension().string();
   std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
@@ -104,7 +106,6 @@ ExtractedContent ContentExtractor::extract_text_file(const std::filesystem::path
   extracted.keywords = extract_keywords(content);
   extracted.file_type = FileType::Text;
   extracted.word_count = count_words(content);
-  extracted.language = "";
 
   return extracted;
 }
@@ -123,7 +124,6 @@ ExtractedContent ContentExtractor::extract_markdown_file(const std::filesystem::
   extracted.keywords = extract_keywords(content);
   extracted.file_type = FileType::Markdown;
   extracted.word_count = count_words(content);
-  extracted.language = "";
 
   return extracted;
 }
@@ -137,7 +137,6 @@ ExtractedContent ContentExtractor::extract_code_file(const std::filesystem::path
   extracted.keywords = extract_keywords(content);
   extracted.file_type = FileType::Code;
   extracted.word_count = count_words(content);
-  extracted.language = detect_language(file_path);
 
   return extracted;
 }
@@ -205,36 +204,6 @@ std::vector<std::string> ContentExtractor::extract_keywords(const std::string &c
   }
 
   return keywords;
-}
-
-std::string ContentExtractor::detect_language(const std::filesystem::path &file_path) {
-  std::string extension = file_path.extension().string();
-  std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-
-  if (extension == ".cpp" || extension == ".cc" || extension == ".cxx" || extension == ".hpp" ||
-      extension == ".h" || extension == ".c") {
-    return "C++";
-  } else if (extension == ".py") {
-    return "Python";
-  } else if (extension == ".js") {
-    return "JavaScript";
-  } else if (extension == ".ts") {
-    return "TypeScript";
-  } else if (extension == ".java") {
-    return "Java";
-  } else if (extension == ".cs") {
-    return "C#";
-  } else if (extension == ".php") {
-    return "PHP";
-  } else if (extension == ".rb") {
-    return "Ruby";
-  } else if (extension == ".go") {
-    return "Go";
-  } else if (extension == ".rs") {
-    return "Rust";
-  } else {
-    return "Unknown";
-  }
 }
 
 size_t ContentExtractor::count_words(const std::string &text) {

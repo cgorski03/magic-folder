@@ -3,6 +3,7 @@
 #include <faiss/Index.h>
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexHNSW.h>
+#include <faiss/IndexIDMap.h>
 // Why is this file named with a different convention
 #include <faiss/index_io.h>
 #include <sqlite3.h>
@@ -93,11 +94,11 @@ class MetadataStore {
   sqlite3 *db_;
 
   // In-memory Faiss index
-  faiss::IndexHNSWFlat *faiss_index_;
+  faiss::Index *faiss_index_;
 
   // Faiss Index Parameters - since we will support multiple embedding models, these will have to be
   // able to change
-  const int VECTOR_DIMENSION = 768;
+  const int VECTOR_DIMENSION = 1024;
   const int HNSW_M_PARAM = 32;
   const int HNSW_EF_CONSTRUCTION_PARAM = 100;
 

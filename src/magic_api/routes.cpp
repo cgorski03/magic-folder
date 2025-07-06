@@ -3,13 +3,20 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 
+#include "magic_services/file_delete_service.hpp"
+#include "magic_services/file_info_service.hpp"
+#include "magic_services/file_processing_service.hpp"
+#include "magic_services/search_service.hpp"
+
 namespace magic_api {
-Routes::Routes(std::shared_ptr<magic_core::OllamaClient> ollama_client,
-               std::shared_ptr<magic_core::MetadataStore> metadata_store,
-               std::shared_ptr<magic_core::ContentExtractor> content_extractor)
-    : ollama_client_(ollama_client),
-      metadata_store_(metadata_store),
-      content_extractor_(content_extractor) {}
+Routes::Routes(std::shared_ptr<magic_services::FileProcessingService> file_processing_service,
+               std::shared_ptr<magic_services::FileDeleteService> file_delete_service,
+               std::shared_ptr<magic_services::FileInfoService> file_info_service,
+               std::shared_ptr<magic_services::SearchService> search_service)
+    : file_processing_service_(file_processing_service),
+      file_delete_service_(file_delete_service),
+      file_info_service_(file_info_service),
+      search_service_(search_service) {}
 
 void Routes::register_routes(Server &server) {
   auto &app = server.get_app();
@@ -58,10 +65,12 @@ crow::response Routes::handle_process_file(const crow::request &req) {
   try {
     std::string file_path = extract_file_path_from_request(req);
     std::cout << "Processing file: " << file_path << std::endl;
-    // TODO: Implement actual file processing
+    magic_services::ProcessFileResult result = file_processing_service_->process_file(file_path);
+    if (!result.success) {
+      std::cout << "Processing file failed: " << file_path << std::endl;
+      return create_json_response(create_error_response(result.error_message), 400);
+    }
     nlohmann::json response = create_success_response("File processed successfully");
-    response["file_id"] = 1;
-    response["vector_id"] = file_path;
 
     return create_json_response(response);
   } catch (const std::exception &e) {
@@ -95,8 +104,15 @@ crow::response Routes::handle_search(const crow::request &req) {
 crow::response Routes::handle_list_files(const crow::request &req) {
   try {
     std::cout << "Listing files" << std::endl;
+    auto files = file_info_service_->list_files();
     nlohmann::json results = nlohmann::json::array();
-    // TODO: Get actual file list from metadata store
+    for (const auto &file : files) {
+      nlohmann::json file_info;
+      file_info["path"] = file.path;
+      file_info["size"] = file.file_size;
+      file_info["type"] = file.file_type;
+      results.push_back(file_info);
+    }
     return create_json_response(results);
   } catch (const std::exception &e) {
     nlohmann::json error_response = create_error_response(e.what());
@@ -175,4 +191,4 @@ int Routes::extract_top_k_from_request(const crow::request &req) {
   auto json_body = parse_json_body(req.body);
   return json_body.value("top_k", 10);
 }
-}
+}  // namespace magic_api

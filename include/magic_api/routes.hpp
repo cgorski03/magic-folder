@@ -4,19 +4,22 @@
 
 #include "server.hpp"
 
-namespace magic_core {
-class OllamaClient;
-class MetadataStore;
-class ContentExtractor;
-}  // namespace magic_core
+// Forward declarations
+namespace magic_services {
+class FileProcessingService;
+class FileDeleteService;
+class FileInfoService;
+class SearchService;
+}  // namespace magic_services
 
 namespace magic_api {
 
 class Routes {
  public:
-  Routes(std::shared_ptr<magic_core::OllamaClient> ollama_client,
-         std::shared_ptr<magic_core::MetadataStore> metadata_store,
-         std::shared_ptr<magic_core::ContentExtractor> content_extractor);
+  Routes(std::shared_ptr<magic_services::FileProcessingService> file_processing_service,
+         std::shared_ptr<magic_services::FileDeleteService> file_delete_service,
+         std::shared_ptr<magic_services::FileInfoService> file_info_service,
+         std::shared_ptr<magic_services::SearchService> search_service);
   ~Routes() = default;
 
   // Disable copy constructor and assignment
@@ -31,9 +34,10 @@ class Routes {
   void register_routes(Server &server);
 
  private:
-  std::shared_ptr<magic_core::OllamaClient> ollama_client_;
-  std::shared_ptr<magic_core::MetadataStore> metadata_store_;
-  std::shared_ptr<magic_core::ContentExtractor> content_extractor_;
+  std::shared_ptr<magic_services::FileProcessingService> file_processing_service_;
+  std::shared_ptr<magic_services::FileDeleteService> file_delete_service_;
+  std::shared_ptr<magic_services::FileInfoService> file_info_service_;
+  std::shared_ptr<magic_services::SearchService> search_service_;
 
   // Route handlers
   crow::response handle_health_check(const crow::request &req);
