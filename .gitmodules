@@ -1,0 +1,3 @@
+[submodule "third_party/ollama_hpp"]
+	path = third_party/ollama_hpp
+	url = git@github.com:cgorski03/ollama-hpp.git
