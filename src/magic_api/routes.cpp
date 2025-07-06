@@ -67,6 +67,7 @@ crow::response Routes::handle_process_file(const crow::request &req) {
     std::cout << "Processing file: " << file_path << std::endl;
     magic_services::ProcessFileResult result = file_processing_service_->process_file(file_path);
     if (!result.success) {
+      std::cout << "Processing file failed: " << file_path << std::endl;
       return create_json_response(create_error_response(result.error_message), 400);
     }
     nlohmann::json response = create_success_response("File processed successfully");
@@ -103,8 +104,15 @@ crow::response Routes::handle_search(const crow::request &req) {
 crow::response Routes::handle_list_files(const crow::request &req) {
   try {
     std::cout << "Listing files" << std::endl;
+    auto files = file_info_service_->list_files();
     nlohmann::json results = nlohmann::json::array();
-    // TODO: Get actual file list from metadata store
+    for (const auto &file : files) {
+      nlohmann::json file_info;
+      file_info["path"] = file.path;
+      file_info["size"] = file.file_size;
+      file_info["type"] = file.file_type;
+      results.push_back(file_info);
+    }
     return create_json_response(results);
   } catch (const std::exception &e) {
     nlohmann::json error_response = create_error_response(e.what());

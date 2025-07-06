@@ -97,7 +97,7 @@ class MetadataStore {
 
   // Faiss Index Parameters - since we will support multiple embedding models, these will have to be
   // able to change
-  const int VECTOR_DIMENSION = 768;
+  const int VECTOR_DIMENSION = 1024;
   const int HNSW_M_PARAM = 32;
   const int HNSW_EF_CONSTRUCTION_PARAM = 100;
 

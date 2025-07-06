@@ -127,7 +127,7 @@ std::chrono::system_clock::time_point MetadataStore::get_file_last_modified(
 void MetadataStore::upsert_file_metadata(const FileMetadata &metadata) {
   std::string last_modified_str = time_point_to_string(metadata.last_modified);
   std::string created_at_str = time_point_to_string(metadata.created_at);
-
+  std::cout << "Upserting file metadata for path: " << metadata.path << std::endl;
   // Use REPLACE to handle upsert.
   // Note: REPLACE deletes and re-inserts, which changes the `id` for existing rows.
   // Since the Faiss index is rebuilt on startup, this ID change is handled
