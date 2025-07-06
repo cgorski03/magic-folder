@@ -45,12 +45,12 @@ magic_core::FileMetadata TestUtilities::create_test_file_metadata(const std::str
   metadata.created_at = now - std::chrono::hours(1);  // Created 1 hour ago
 
   if (include_vector) {
-    // Create a deterministic 768-dimension vector based on the path hash
-    metadata.vector_embedding.resize(768);
+    // Create a deterministic 1024-dimension vector based on the path hash
+    metadata.vector_embedding.resize(1024);
     std::hash<std::string> hasher;
     size_t path_hash = hasher(path);
 
-    for (int i = 0; i < 768; ++i) {
+    for (int i = 0; i < 1024; ++i) {
       metadata.vector_embedding[i] = static_cast<float>((path_hash + i) % 1000) / 1000.0f;
     }
   }

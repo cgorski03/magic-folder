@@ -93,7 +93,7 @@ TEST_F(FileDeleteServiceTest, DeleteFile_HandlesFileWithVectorEmbedding) {
   ASSERT_TRUE(metadata_store_->file_exists(test_path));
   auto file_before = metadata_store_->get_file_metadata(test_path);
   ASSERT_TRUE(file_before.has_value());
-  ASSERT_EQ(file_before->vector_embedding.size(), 768);
+  ASSERT_EQ(file_before->vector_embedding.size(), 1024);
 
   // Act
   file_delete_service_->delete_file(test_path);

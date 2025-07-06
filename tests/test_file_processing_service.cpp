@@ -101,7 +101,7 @@ TEST_F(FileProcessingServiceTest, ProcessFile_SuccessfulProcessing) {
   EXPECT_EQ(stored_metadata->file_type, magic_core::FileType::Text);
   EXPECT_EQ(stored_metadata->file_size, std::filesystem::file_size(test_file_path_));
   EXPECT_EQ(stored_metadata->vector_embedding, embedding);
-  EXPECT_EQ(stored_metadata->vector_embedding.size(), 768);
+  EXPECT_EQ(stored_metadata->vector_embedding.size(), 1024);
 }
 
 // Test file processing with different file types

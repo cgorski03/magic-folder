@@ -64,7 +64,7 @@ inline magic_core::ExtractedContent create_test_extracted_content(
 }
 
 // Create a test embedding vector
-inline std::vector<float> create_test_embedding(float value = 0.1f, size_t dimensions = 768) {
+inline std::vector<float> create_test_embedding(float value = 0.1f, size_t dimensions = 1024) {
   std::vector<float> embedding(dimensions, value);
   embedding[0] = 0.5f;
   embedding[100] = 0.3f;
@@ -74,7 +74,7 @@ inline std::vector<float> create_test_embedding(float value = 0.1f, size_t dimen
 
 // Create a test embedding with custom values
 inline std::vector<float> create_test_embedding_with_values(const std::vector<float>& values) {
-  std::vector<float> embedding(768, 0.1f);
+  std::vector<float> embedding(1024, 0.1f);
   for (size_t i = 0; i < values.size() && i < embedding.size(); ++i) {
     embedding[i] = values[i];
   }

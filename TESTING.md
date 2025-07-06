@@ -118,7 +118,7 @@ Tests use realistic file metadata including:
 - Various file types (text files, images)
 - Real timestamps
 - Content hashes
-- Vector embeddings (768-dimension for compatibility with the embedding model)
+- Vector embeddings (1024-dimension for compatibility with the embedding model)
 
 ## Debugging Tests
 
@@ -184,7 +184,7 @@ cmake -DCMAKE_BUILD_TYPE=Debug ..
 4. **Vector dimension mismatch**
    ```
    Error: Vector embedding size mismatch
-   Solution: Ensure vector embeddings are exactly 768 dimensions
+   Solution: Ensure vector embeddings are exactly 1024 dimensions
    ```
 
 ## Adding New Tests
@@ -344,7 +344,7 @@ namespace MockUtilities {
       const std::string& content_hash = "test_hash_123");
 
   // Create test embedding vectors
-  std::vector<float> create_test_embedding(float value = 0.1f, size_t dimensions = 768);
+  std::vector<float> create_test_embedding(float value = 0.1f, size_t dimensions = 1024);
   
   // Create embeddings with custom values
   std::vector<float> create_test_embedding_with_values(const std::vector<float>& values);

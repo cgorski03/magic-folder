@@ -97,7 +97,7 @@ TEST_F(FileInfoServiceTest, ListFiles_PreservesVectorEmbeddings) {
   });
   ASSERT_NE(vector_file_it, result.end());
 
-  EXPECT_EQ(vector_file_it->vector_embedding.size(), 768);
+  EXPECT_EQ(vector_file_it->vector_embedding.size(), 1024);
   // Check that vector is properly preserved (non-zero values)
   EXPECT_GT(vector_file_it->vector_embedding[0], 0.0f);
   EXPECT_GT(vector_file_it->vector_embedding[100], 0.0f);
@@ -266,7 +266,7 @@ TEST_F(FileInfoServiceTest, GetFileInfo_PreservesVectorEmbedding) {
 
   // Assert
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result->vector_embedding.size(), 768);
+  EXPECT_EQ(result->vector_embedding.size(), 1024);
 
   // Check that vector values are reasonable (deterministic based on path)
   EXPECT_GT(result->vector_embedding[0], 0.0f);

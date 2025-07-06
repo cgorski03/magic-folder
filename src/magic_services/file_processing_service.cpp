@@ -20,7 +20,6 @@ FileProcessingService::FileProcessingService(
 
 magic_services::ProcessFileResult FileProcessingService::process_file(
     const std::filesystem::path &file_path) {
-  try {
     // First, we need to extract the content of the file
     magic_core::ExtractedContent content = content_extractor_->extract_content(file_path);
     // Now we need to get the embedding of the content
@@ -41,9 +40,5 @@ magic_services::ProcessFileResult FileProcessingService::process_file(
                                                file_metadata.content_hash,
                                                to_string(file_metadata.file_type));
 
-  } catch (const std::exception &e) {
-    std::cout << "Error processing file: " << e.what() << std::endl;
-    return ProcessFileResult::failure_response(e.what());
-  }
 }
 }  // namespace magic_services
