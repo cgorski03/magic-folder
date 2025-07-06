@@ -1,9 +1,5 @@
 #pragma once
 
-#include <curl/curl.h>
-
-#include <memory>
-#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 
@@ -36,15 +32,14 @@ class OllamaClient {
 
   // Get embedding for text
   virtual std::vector<float> get_embedding(const std::string &text);
+  virtual bool is_server_available();
 
  private:
   std::string ollama_url_;
   std::string embedding_model_;
-  CURL *curl_handle_;
 
   // Helper methods
-  static size_t write_callback(void *contents, size_t size, size_t nmemb, std::string *userp);
-  void setup_curl_handle();
+  void setup_server_connection();
 };
 
 }  // namespace magic_core

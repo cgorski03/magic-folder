@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <thread>
 
 #include "ollama.hpp"
 
@@ -24,15 +25,17 @@ void OllamaClient::setup_server_connection() {
 
 std::vector<float> OllamaClient::get_embedding(const std::string &text) {
   try {
-    // Use ollama-hpp for the actual work
-    auto response = ollama::generate_embeddings(embedding_model_, text);
+    ollama::response response = ollama::generate_embeddings(embedding_model_, text);
 
-    // Extract embedding from response
+    // Get the JSON structure
     auto json_response = response.as_json();
+
+    // Check if embedding field exists
     if (!json_response.contains("embedding")) {
       throw OllamaError("Response does not contain embedding field");
     }
 
+    // Convert JSON array to vector<float>
     return json_response["embedding"].get<std::vector<float>>();
 
   } catch (const ollama::exception &e) {
@@ -41,30 +44,8 @@ std::vector<float> OllamaClient::get_embedding(const std::string &text) {
   }
 }
 
-std::string OllamaClient::generate_text(const std::string &prompt) {
-  try {
-    auto response = ollama::generate(embedding_model_, prompt);
-    return response.as_simple_string();
-  } catch (const ollama::exception &e) {
-    throw OllamaError("Text generation failed: " + std::string(e.what()));
-  }
-}
-
-std::string OllamaClient::chat(const std::string &message) {
-  // Implementation of chat function
-  throw OllamaError("Chat function not implemented");
-}
-
 bool OllamaClient::is_server_available() {
   return ollama::is_running();
-}
-
-void OllamaClient::set_retry_attempts(int attempts) {
-  retry_attempts_ = attempts;
-}
-
-void OllamaClient::enable_caching(bool enable) {
-  caching_enabled_ = enable;
 }
 
 }  // namespace magic_core
