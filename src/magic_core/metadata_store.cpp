@@ -1,8 +1,7 @@
 #include "magic_core/metadata_store.hpp"
 
-#include <faiss/Index.h>
-#include <faiss/IndexFlat.h>
 #include <faiss/IndexHNSW.h>
+#include <faiss/IndexIDMap.h>
 
 #include <fstream>
 #include <iomanip>
@@ -344,13 +343,13 @@ void MetadataStore::rebuild_faiss_index() {
     faiss_index_ = nullptr;
   }
 
-  // Create a new HNSW index
-  // Using IndexHNSWFlat means raw vectors are stored internally by Faiss,
-  // and distance calculations are exact.
-  faiss_index_ = new faiss::IndexHNSWFlat(VECTOR_DIMENSION, HNSW_M_PARAM);
-  // Set efConstruction. This parameter affects graph quality during build.
-  faiss_index_->hnsw.efConstruction = HNSW_EF_CONSTRUCTION_PARAM;
-
+  // Create HNSW index wrapped with IDMap for custom ID support
+  auto base_index = new faiss::IndexHNSWFlat(VECTOR_DIMENSION, HNSW_M_PARAM);
+  base_index->hnsw.efConstruction = HNSW_EF_CONSTRUCTION_PARAM;
+  
+  // Wrap with IDMap to enable add_with_ids
+  faiss_index_ = new faiss::IndexIDMap(base_index);
+  
   std::vector<faiss::idx_t> faiss_ids;
   std::vector<float> all_vectors_flat;
   int current_num_vectors = 0;
