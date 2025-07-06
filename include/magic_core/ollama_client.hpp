@@ -20,15 +20,11 @@ class OllamaError : public std::exception {
 class OllamaClient {
  public:
   OllamaClient(const std::string &ollama_url, const std::string &embedding_model);
-  ~OllamaClient();
+  ~OllamaClient() = default;
 
   // Disable copy constructor and assignment
   OllamaClient(const OllamaClient &) = delete;
   OllamaClient &operator=(const OllamaClient &) = delete;
-
-  // Allow move constructor and assignment
-  OllamaClient(OllamaClient &&) noexcept;
-  OllamaClient &operator=(OllamaClient &&) noexcept;
 
   // Get embedding for text
   virtual std::vector<float> get_embedding(const std::string &text);

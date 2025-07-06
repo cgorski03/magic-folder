@@ -14,7 +14,7 @@ namespace magic_tests {
  */
 class MockOllamaClient : public magic_core::OllamaClient {
  public:
-  MockOllamaClient() : magic_core::OllamaClient("http://localhost:11434", "nomic-embed-text") {}
+  MockOllamaClient() : magic_core::OllamaClient("http://localhost:11434", "mxbai-embed-large") {}
 
   MOCK_METHOD(std::vector<float>, get_embedding, (const std::string& text), (override));
 };

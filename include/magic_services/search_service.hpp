@@ -8,6 +8,17 @@
 
 namespace magic_services {
 
+class SearchServiceException : public std::exception {
+ public:
+  SearchServiceException(const std::string &message) : message_(message) {}
+  const char *what() const noexcept override {
+    return message_.c_str();
+  }
+
+ private:
+  std::string message_;
+};
+
 class SearchService {
  public:
   SearchService(std::shared_ptr<magic_core::MetadataStore> metadata_store,
@@ -23,4 +34,4 @@ class SearchService {
   std::shared_ptr<magic_core::OllamaClient> ollama_client_;
 };
 
-}
+}  // namespace magic_services

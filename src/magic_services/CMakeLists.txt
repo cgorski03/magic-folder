@@ -3,6 +3,7 @@ set(MAGIC_SERVICES_SOURCES
     file_delete_service.cpp
     file_info_service.cpp
     file_processing_service.cpp
+    search_service.cpp
 )
 
 add_library(magic_services STATIC ${MAGIC_SERVICES_SOURCES})

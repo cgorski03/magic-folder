@@ -16,7 +16,8 @@ FileProcessingService::FileProcessingService(
       content_extractor_(content_extractor),
       ollama_client_(ollama_client) {}
 
-void FileProcessingService::process_file(const std::filesystem::path &file_path) {
+magic_services::ProcessFileResult FileProcessingService::process_file(
+    const std::filesystem::path &file_path) {
   // First, we need to extract the content of the file
   magic_core::ExtractedContent content = content_extractor_->extract_content(file_path);
   // Now we need to get the embedding of the content
@@ -33,5 +34,8 @@ void FileProcessingService::process_file(const std::filesystem::path &file_path)
   file_metadata.id = 0;
 
   metadata_store_->upsert_file_metadata(file_metadata);
+  return ProcessFileResult::success_response(file_path, file_metadata.file_size,
+                                             file_metadata.content_hash,
+                                             to_string(file_metadata.file_type));
 }
 }  // namespace magic_services

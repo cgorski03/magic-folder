@@ -8,6 +8,10 @@
 #include "magic_core/content_extractor.hpp"
 #include "magic_core/metadata_store.hpp"
 #include "magic_core/ollama_client.hpp"
+#include "magic_services/file_delete_service.hpp"
+#include "magic_services/file_info_service.hpp"
+#include "magic_services/file_processing_service.hpp"
+#include "magic_services/search_service.hpp"
 
 int main() {
   try {
@@ -29,6 +33,13 @@ int main() {
     auto metadata_store = std::make_shared<magic_core::MetadataStore>(metadata_path);
     auto content_extractor = std::make_shared<magic_core::ContentExtractor>();
 
+    auto file_processing_service = std::make_shared<magic_services::FileProcessingService>(
+        metadata_store, content_extractor, ollama_client);
+    auto file_delete_service = std::make_shared<magic_services::FileDeleteService>(metadata_store);
+    auto file_info_service = std::make_shared<magic_services::FileInfoService>(metadata_store);
+    auto search_service =
+        std::make_shared<magic_services::SearchService>(metadata_store, ollama_client);
+
     // Parse server URL
     size_t colon_pos = server_url.find(':');
     if (colon_pos == std::string::npos) {
@@ -39,11 +50,11 @@ int main() {
     std::string host = server_url.substr(0, colon_pos);
     int port = std::stoi(server_url.substr(colon_pos + 1));
 
-    // Create and configure server
     magic_api::Server server(host, port);
 
     // Create routes and register them
-    magic_api::Routes routes(ollama_client, metadata_store, content_extractor);
+    magic_api::Routes routes(file_processing_service, file_delete_service, file_info_service,
+                             search_service);
     routes.register_routes(server);
 
     std::cout << "Server configured successfully. Starting..." << std::endl;
