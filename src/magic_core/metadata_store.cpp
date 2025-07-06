@@ -434,7 +434,7 @@ std::vector<SearchResult> MetadataStore::search_similar_files(
     std::optional<FileMetadata> metadata = get_file_metadata(static_cast<int>(faiss_id));
 
     if (metadata) {
-      results.push_back({metadata->id, distances[i], metadata->path});
+      results.push_back({metadata->id, distances[i], std::move(*metadata)});
     } else {
       // This is a critical warning: Faiss returned an ID, but it's not in the DB.
       // This should ideally not happen if IDs are consistent between Faiss and SQLite,
