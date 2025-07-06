@@ -49,6 +49,7 @@ ExtractedContent ContentExtractor::extract_content(const std::filesystem::path &
     default:
       throw ContentExtractorError("Unsupported file type: " + file_path.string());
   }
+  
 }
 
 ExtractedContent ContentExtractor::extract_from_text(const std::string &text,
@@ -102,6 +103,7 @@ ExtractedContent ContentExtractor::extract_text_file(const std::filesystem::path
 
   ExtractedContent extracted;
   extracted.text_content = content;
+  extracted.content_hash = compute_content_hash(file_path);
   extracted.title = extract_title_from_content(content);
   extracted.keywords = extract_keywords(content);
   extracted.file_type = FileType::Text;
@@ -120,6 +122,7 @@ ExtractedContent ContentExtractor::extract_markdown_file(const std::filesystem::
 
   ExtractedContent extracted;
   extracted.text_content = content;
+  extracted.content_hash = compute_content_hash(file_path);
   extracted.title = extract_title_from_content(content);
   extracted.keywords = extract_keywords(content);
   extracted.file_type = FileType::Markdown;
@@ -133,6 +136,7 @@ ExtractedContent ContentExtractor::extract_code_file(const std::filesystem::path
 
   ExtractedContent extracted;
   extracted.text_content = content;
+  extracted.content_hash = compute_content_hash(file_path);
   extracted.title = file_path.filename().string();
   extracted.keywords = extract_keywords(content);
   extracted.file_type = FileType::Code;
@@ -232,6 +236,14 @@ std::string ContentExtractor::compute_content_hash(const std::filesystem::path &
 
   char buffer[1024];
   while (file.read(buffer, sizeof(buffer))) {
+    if (EVP_DigestUpdate(mdctx, buffer, file.gcount()) != 1) {
+      EVP_MD_CTX_free(mdctx);
+      throw ContentExtractorError("Failed to update SHA256 digest");
+    }
+  }
+  
+  // Process any remaining bytes (for files smaller than buffer size)
+  if (file.gcount() > 0) {
     if (EVP_DigestUpdate(mdctx, buffer, file.gcount()) != 1) {
       EVP_MD_CTX_free(mdctx);
       throw ContentExtractorError("Failed to update SHA256 digest");

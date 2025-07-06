@@ -85,7 +85,6 @@ class MetadataStore {
 
   void rebuild_faiss_index();
 
-  std::string compute_content_hash(const std::filesystem::path &file_path);
 
  private:
   std::filesystem::path db_path_;
