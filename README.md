@@ -1,6 +1,6 @@
 # Magic Folder C++
 
-An intelligent file management system that uses AI to organize and classify your files, with uncompromising focus on privacy and performance.
+An intelligent file management system leveraging locally-run LLMs and embedding models to organize and classify your files with an unyielding commitment to privacy and performance.
 
 ## Overview
 
