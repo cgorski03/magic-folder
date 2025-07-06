@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -11,9 +13,11 @@ class Config {
   std::string metadata_db_path;
   std::string ollama_url;
   std::string embedding_model;
-
   static Config from_environment() {
     Config config;
+
+    // Load .env file first
+    load_env_file(".env");
 
     config.api_base_url = get_env_or_default("API_BASE_URL", "127.0.0.1:3030");
     config.metadata_db_path = get_env_or_default("METADATA_DB_PATH", "./data/metadata.db");
@@ -25,6 +29,42 @@ class Config {
   }
 
  private:
+  static void load_env_file(const std::string& filename) {
+    // custom implementation to avoid a pointless dependency
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+      std::cout << "Warning: .env file not found, using system environment variables" << std::endl;
+      return;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+      // Skip empty lines and comments
+      if (line.empty() || line[0] == '#') {
+        continue;
+      }
+
+      // Find the equals sign
+      size_t pos = line.find('=');
+      if (pos == std::string::npos) {
+        continue;  // Skip malformed lines
+      }
+
+      std::string key = line.substr(0, pos);
+      std::string value = line.substr(pos + 1);
+
+      // Remove quotes if present
+      if (value.length() >= 2 && value[0] == '"' && value[value.length() - 1] == '"') {
+        value = value.substr(1, value.length() - 2);
+      }
+
+      // Only set if not already in environment
+      if (std::getenv(key.c_str()) == nullptr) {
+        setenv(key.c_str(), value.c_str(), 1);
+      }
+    }
+  }
+
   static std::string get_env_or_default(const char* name, const std::string& default_value) {
     const char* value = std::getenv(name);
     if (!value) {
