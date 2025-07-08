@@ -89,10 +89,13 @@ crow::response Routes::handle_search(const crow::request &req) {
 
     // Placeholder search results
     nlohmann::json results = nlohmann::json::array();
-    nlohmann::json result;
-    result["path"] = "example.txt";
-    result["score"] = 0.85;
-    results.push_back(result);
+    std::vector<magic_core::SearchResult> search_results = search_service_->search(query, top_k);
+    for (const magic_core::SearchResult &result : search_results) {
+      nlohmann::json result_json;
+      result_json["path"] = result.file.path;
+      result_json["score"] = result.distance;
+      results.push_back(result_json);
+    }
 
     return create_json_response(results);
   } catch (const std::exception &e) {

@@ -32,9 +32,7 @@ struct FileMetadata {
 struct SearchResult {
   int id;
   float distance;
-  std::string path;  // Include path directly for convenience in results
-  // You could also add other relevant metadata fields here if desired,
-  // or return the full FileMetadata object if that suits your needs better.
+  FileMetadata file;
 };
 
 class MetadataStoreError : public std::exception {
@@ -87,7 +85,6 @@ class MetadataStore {
 
   void rebuild_faiss_index();
 
-  std::string compute_content_hash(const std::filesystem::path &file_path);
 
  private:
   std::filesystem::path db_path_;

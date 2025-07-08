@@ -17,7 +17,7 @@ void OllamaClient::setup_server_connection() {
   // Set the server URL for ollama-hpp
   ollama::setServerURL(ollama_url_);
   // DEBUG
-  ollama::log_replies = true;
+  // ollama::log_replies = true;
   // Your custom initialization logic
   if (!ollama::is_running()) {
     throw OllamaError("Ollama server is not running at " + ollama_url_);
