@@ -89,17 +89,33 @@ void MetadataStore::initialize() {
 
 void MetadataStore::create_tables() {
   const char *sql = R"(
-        CREATE TABLE IF NOT EXISTS files (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            path TEXT UNIQUE NOT NULL,
-            content_hash TEXT NOT NULL,
-            last_modified TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            file_type TEXT NOT NULL,
-            file_size INTEGER NOT NULL,
-            vector BLOB
-        );
-    )";
+    CREATE TABLE IF NOT EXISTS files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        path TEXT UNIQUE NOT NULL,
+        original_path TEXT,
+        file_hash TEXT NOT NULL,
+        processing_status TEXT DEFAULT 'IDLE',
+        summary_vector_blob BLOB,
+        suggested_category TEXT,
+        suggested_filename TEXT,
+        tags TEXT,
+        last_modified TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        file_type TEXT NOT NULL,
+        file_size INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS chunks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_id INTEGER NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        vector_blob BLOB,
+        FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+    );
+
+  )";
+
 
   execute_sql(sql);
 }

@@ -241,3 +241,33 @@ graph TD
     class B,S process
 
 ```
+
+# Chunking Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant WorkerThread
+    participant ExtractorFactory
+    participant MarkdownExtractor
+    participant PlainTextExtractor
+
+    WorkerThread->>ExtractorFactory: get_extractor_for("report.md")
+    ExtractorFactory->>MarkdownExtractor: can_handle("report.md")?
+    MarkdownExtractor-->>ExtractorFactory: true
+    ExtractorFactory-->>WorkerThread: Returns reference to MarkdownExtractor
+
+    WorkerThread->>MarkdownExtractor: get_chunks("report.md")
+    MarkdownExtractor-->>WorkerThread: Returns vector<Chunk>
+
+    %% Second scenario for a different file type
+    Note over WorkerThread, PlainTextExtractor: Later, for another file...
+
+    WorkerThread->>ExtractorFactory: get_extractor_for("notes.txt")
+    ExtractorFactory->>MarkdownExtractor: can_handle("notes.txt")?
+    MarkdownExtractor-->>ExtractorFactory: false
+    ExtractorFactory->>PlainTextExtractor: can_handle("notes.txt")?
+    PlainTextExtractor-->>ExtractorFactory: true
+    ExtractorFactory-->>WorkerThread: Returns reference to PlainTextExtractor
+
+    WorkerThread->>PlainTextExtractor: get_chunks("notes.txt")
+    PlainTextExtractor-->>WorkerThread: Returns vector<Chunk>
+```
