@@ -10,12 +10,12 @@
 
 #include <chrono>
 #include <filesystem>
-#include <memory>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
+#include "magic_core/types/chunk.hpp"
+#include "magic_core/types/file.hpp"
 
-#include "magic_core/types.hpp"
 namespace magic_core {
 
 struct FileMetadata {
@@ -33,6 +33,11 @@ struct SearchResult {
   int id;
   float distance;
   FileMetadata file;
+};
+
+struct ChunkWithEmbedding {
+  Chunk chunk;
+  std::vector<float> embedding;
 };
 
 class MetadataStoreError : public std::exception {
@@ -65,6 +70,9 @@ class MetadataStore {
 
   // Add or update file metadata (now including vector embedding)
   void upsert_file_metadata(const FileMetadata &metadata);
+
+  // Add or update chunk information, supports batching
+  void upsert_chunk_metadata(const int file_id, const std::vector<ChunkWithEmbedding> &chunks);
 
   // Get file metadata by path
   std::optional<FileMetadata> get_file_metadata(const std::string &path);

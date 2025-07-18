@@ -2,8 +2,6 @@
 
 #include <faiss/IndexHNSW.h>
 #include <faiss/IndexIDMap.h>
-
-#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -187,6 +185,50 @@ void MetadataStore::upsert_file_metadata(const FileMetadata &metadata) {
   }
 
   sqlite3_finalize(stmt);
+}
+
+void MetadataStore::upsert_chunk_metadata(
+        int file_id,
+        const std::vector<ChunkWithEmbedding>& chunks)
+{
+    if (chunks.empty()) return;
+
+    const char* sql =
+        "REPLACE INTO chunks (file_id, chunk_index, content, vector_blob) "
+        "VALUES (?, ?, ?, ?)";
+
+    // Start explicit transaction to batch insert chunks
+    char* errmsg = nullptr;
+    if (sqlite3_exec(db_, "BEGIN TRANSACTION;", nullptr, nullptr, &errmsg) != SQLITE_OK)
+        throw MetadataStoreError(errmsg);
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
+        throw MetadataStoreError("prepare failed: " + std::string(sqlite3_errmsg(db_)));
+    }
+
+    for (const auto& ce : chunks) {
+        sqlite3_bind_int (stmt, 1, file_id);
+        sqlite3_bind_int (stmt, 2, ce.chunk.chunk_index);
+        sqlite3_bind_text(stmt, 3, ce.chunk.content.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_blob(stmt, 4,
+                          ce.embedding.data(),
+                          static_cast<int>(ce.embedding.size() * sizeof(float)),
+                          SQLITE_STATIC);
+
+        if (sqlite3_step(stmt) != SQLITE_DONE) {
+            sqlite3_finalize(stmt);
+            sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
+            throw MetadataStoreError("step failed: " + std::string(sqlite3_errmsg(db_)));
+        }
+        sqlite3_reset(stmt);
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (sqlite3_exec(db_, "COMMIT;", nullptr, nullptr, &errmsg) != SQLITE_OK)
+        throw MetadataStoreError(errmsg);
 }
 
 std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &path) {

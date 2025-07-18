@@ -1,21 +1,18 @@
 #include "magic_services/file_processing_service.hpp"
 
-#include <iostream>
-
 namespace magic_services {
 
-// Converts a std::filesystem::file_time_type to std::chrono::system_clock::time_point
-auto to_sys_time = [](std::filesystem::file_time_type ftime) {
+  auto to_sys_time = [](std::filesystem::file_time_type ftime) {
   return std::chrono::time_point_cast<std::chrono::system_clock::duration>(
       ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
 };
 
 FileProcessingService::FileProcessingService(
-    std::shared_ptr<magic_core::MetadataStore> metadata_store,
-    std::shared_ptr<magic_core::ContentExtractor> content_extractor,
+      std::shared_ptr<magic_core::MetadataStore> metadata_store,
+      std::shared_ptr<magic_core::ContentExtractorFactory> content_extractor_factory,
     std::shared_ptr<magic_core::OllamaClient> ollama_client)
     : metadata_store_(metadata_store),
-      content_extractor_(content_extractor),
+      content_extractor_factory_(content_extractor_factory),
       ollama_client_(ollama_client) {}
 
 magic_services::ProcessFileResult FileProcessingService::process_file(
@@ -41,4 +38,4 @@ magic_services::ProcessFileResult FileProcessingService::process_file(
                                                to_string(file_metadata.file_type));
 
 }
-}  // namespace magic_services
+}
