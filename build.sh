@@ -29,6 +29,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     EXTRA_CMAKE_ARGS="-DVCPKG_INSTALL_OPTIONS=--allow-unsupported"
 fi
 
+
 # Navigate to build directory
 cd build
 
