@@ -111,9 +111,7 @@ void MetadataStore::create_tables() {
         vector_blob BLOB,
         FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
     );
-
   )";
-
 
   execute_sql(sql);
 }
@@ -137,46 +135,71 @@ std::chrono::system_clock::time_point MetadataStore::get_file_last_modified(
   return sctp;
 }
 
-void MetadataStore::upsert_file_metadata(const FileMetadata &metadata) {
-  std::string last_modified_str = time_point_to_string(metadata.last_modified);
-  std::string created_at_str = time_point_to_string(metadata.created_at);
-  std::cout << "Upserting file metadata for path: " << metadata.path << std::endl;
-  // Use REPLACE to handle upsert.
-  // Note: REPLACE deletes and re-inserts, which changes the `id` for existing rows.
-  // Since the Faiss index is rebuilt on startup, this ID change is handled
-  // by the rebuild process. If you needed in-place Faiss updates, this would
-  // require more complex logic.
-  std::string sql =
-      "REPLACE INTO files (path, content_hash, last_modified, created_at, file_type, file_size, "
-      "vector) "
-      "VALUES (?, ?, ?, ?, ?, ?, ?)";
+int MetadataStore::create_file_stub(const BasicFileMetadata &basic_metadata) {
+  std::string last_modified_str = time_point_to_string(basic_metadata.last_modified);
+  std::string created_at_str = time_point_to_string(basic_metadata.created_at);
+  
+  const char *sql = 
+      "INSERT INTO files (path, original_path, file_hash, processing_status, tags, "
+      "last_modified, created_at, file_type, file_size) "
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
   sqlite3_stmt *stmt;
-  int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+  int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
   if (rc != SQLITE_OK) {
     throw MetadataStoreError("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
   }
 
-  sqlite3_bind_text(stmt, 1, metadata.path.c_str(), -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 2, metadata.content_hash.c_str(), -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 3, last_modified_str.c_str(), -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 4, created_at_str.c_str(), -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 5, to_string(metadata.file_type).c_str(), -1, SQLITE_STATIC);
-  sqlite3_bind_int64(stmt, 6, metadata.file_size);
+  sqlite3_bind_text(stmt, 1, basic_metadata.path.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 2, basic_metadata.original_path.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 3, basic_metadata.content_hash.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 4, basic_metadata.processing_status.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 5, basic_metadata.tags.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 6, last_modified_str.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 7, created_at_str.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 8, to_string(basic_metadata.file_type).c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_int64(stmt, 9, basic_metadata.file_size);
+
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_DONE) {
+    sqlite3_finalize(stmt);
+    throw MetadataStoreError("Failed to execute statement: " + std::string(sqlite3_errmsg(db_)));
+  }
+
+  sqlite3_finalize(stmt);
+  return static_cast<int>(sqlite3_last_insert_rowid(db_));
+}
+
+void MetadataStore::update_file_ai_analysis(int file_id, 
+                                           const std::vector<float> &summary_vector,
+                                           const std::string &suggested_category,
+                                           const std::string &suggested_filename) {
+  const char *sql = 
+      "UPDATE files SET summary_vector_blob = ?, suggested_category = ?, suggested_filename = ? "
+      "WHERE id = ?";
+
+  sqlite3_stmt *stmt;
+  int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
+  if (rc != SQLITE_OK) {
+    throw MetadataStoreError("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
+  }
 
   // Bind vector as BLOB
-  if (!metadata.vector_embedding.empty()) {
-    if (metadata.vector_embedding.size() * sizeof(float) != VECTOR_DIMENSION * sizeof(float)) {
-      throw MetadataStoreError("Vector embedding size mismatch for path " + metadata.path +
+  if (!summary_vector.empty()) {
+    if (summary_vector.size() != VECTOR_DIMENSION) {
+      throw MetadataStoreError("Vector embedding size mismatch for file_id " + std::to_string(file_id) +
                                ". Expected " + std::to_string(VECTOR_DIMENSION) +
-                               " dimensions, got " +
-                               std::to_string(metadata.vector_embedding.size()) + ".");
+                               " dimensions, got " + std::to_string(summary_vector.size()) + ".");
     }
-    sqlite3_bind_blob(stmt, 7, metadata.vector_embedding.data(),
-                      metadata.vector_embedding.size() * sizeof(float), SQLITE_STATIC);
+    sqlite3_bind_blob(stmt, 1, summary_vector.data(),
+                      summary_vector.size() * sizeof(float), SQLITE_STATIC);
   } else {
-    sqlite3_bind_null(stmt, 7);
+    sqlite3_bind_null(stmt, 1);
   }
+
+  sqlite3_bind_text(stmt, 2, suggested_category.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 3, suggested_filename.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_int(stmt, 4, file_id);
 
   rc = sqlite3_step(stmt);
   if (rc != SQLITE_DONE) {
@@ -233,7 +256,9 @@ void MetadataStore::upsert_chunk_metadata(
 
 std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &path) {
   std::string sql =
-      "SELECT id, path, content_hash, last_modified, created_at, file_type, file_size, vector "
+      "SELECT id, path, original_path, file_hash, processing_status, tags, "
+      "last_modified, created_at, file_type, file_size, summary_vector_blob, "
+      "suggested_category, suggested_filename "
       "FROM files WHERE path = ?";
 
   sqlite3_stmt *stmt;
@@ -248,27 +273,44 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &
     FileMetadata metadata;
     metadata.id = sqlite3_column_int(stmt, 0);
     metadata.path = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
-    metadata.content_hash = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
+    
+    const char* original_path = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
+    if (original_path) metadata.original_path = original_path;
+    
+    metadata.content_hash = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
+    
+    const char* processing_status = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4));
+    if (processing_status) metadata.processing_status = processing_status;
+    
+    const char* tags = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5));
+    if (tags) metadata.tags = tags;
+    
     metadata.last_modified =
-        string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
+        string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 6)));
     metadata.created_at =
-        string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4)));
+        string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 7)));
     metadata.file_type =
-        file_type_from_string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5)));
-    metadata.file_size = sqlite3_column_int64(stmt, 6);
+        file_type_from_string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 8)));
+    metadata.file_size = sqlite3_column_int64(stmt, 9);
 
-    const void *vector_blob = sqlite3_column_blob(stmt, 7);
-    int blob_size = sqlite3_column_bytes(stmt, 7);
+    const void *vector_blob = sqlite3_column_blob(stmt, 10);
+    int blob_size = sqlite3_column_bytes(stmt, 10);
     if (vector_blob && blob_size > 0) {
       if (blob_size % sizeof(float) != 0 || blob_size / sizeof(float) != VECTOR_DIMENSION) {
         std::cerr << "Warning: Vector for ID " << metadata.id << " has unexpected size. Expected "
                   << VECTOR_DIMENSION << " floats, got " << blob_size / sizeof(float) << "."
                   << std::endl;
       }
-      metadata.vector_embedding.assign(
+      metadata.summary_vector_embedding.assign(
           reinterpret_cast<const float *>(vector_blob),
           reinterpret_cast<const float *>(vector_blob) + (blob_size / sizeof(float)));
     }
+
+    const char* suggested_category = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 11));
+    if (suggested_category) metadata.suggested_category = suggested_category;
+    
+    const char* suggested_filename = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 12));
+    if (suggested_filename) metadata.suggested_filename = suggested_filename;
 
     sqlite3_finalize(stmt);
     return metadata;
@@ -280,7 +322,9 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &
 
 std::optional<FileMetadata> MetadataStore::get_file_metadata(int id) {
   std::string sql =
-      "SELECT id, path, content_hash, last_modified, created_at, file_type, file_size, vector "
+      "SELECT id, path, original_path, file_hash, processing_status, tags, "
+      "last_modified, created_at, file_type, file_size, summary_vector_blob, "
+      "suggested_category, suggested_filename "
       "FROM files WHERE id = ?";
 
   sqlite3_stmt *stmt;
@@ -295,27 +339,44 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(int id) {
     FileMetadata metadata;
     metadata.id = sqlite3_column_int(stmt, 0);
     metadata.path = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
-    metadata.content_hash = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
+    
+    const char* original_path = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
+    if (original_path) metadata.original_path = original_path;
+    
+    metadata.content_hash = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
+    
+    const char* processing_status = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4));
+    if (processing_status) metadata.processing_status = processing_status;
+    
+    const char* tags = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5));
+    if (tags) metadata.tags = tags;
+    
     metadata.last_modified =
-        string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
+        string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 6)));
     metadata.created_at =
-        string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4)));
+        string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 7)));
     metadata.file_type =
-        file_type_from_string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5)));
-    metadata.file_size = sqlite3_column_int64(stmt, 6);
+        file_type_from_string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 8)));
+    metadata.file_size = sqlite3_column_int64(stmt, 9);
 
-    const void *vector_blob = sqlite3_column_blob(stmt, 7);
-    int blob_size = sqlite3_column_bytes(stmt, 7);
+    const void *vector_blob = sqlite3_column_blob(stmt, 10);
+    int blob_size = sqlite3_column_bytes(stmt, 10);
     if (vector_blob && blob_size > 0) {
       if (blob_size % sizeof(float) != 0 || blob_size / sizeof(float) != VECTOR_DIMENSION) {
         std::cerr << "Warning: Vector for ID " << metadata.id << " has unexpected size. Expected "
                   << VECTOR_DIMENSION << " floats, got " << blob_size / sizeof(float) << "."
                   << std::endl;
       }
-      metadata.vector_embedding.assign(
+      metadata.summary_vector_embedding.assign(
           reinterpret_cast<const float *>(vector_blob),
           reinterpret_cast<const float *>(vector_blob) + (blob_size / sizeof(float)));
     }
+
+    const char* suggested_category = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 11));
+    if (suggested_category) metadata.suggested_category = suggested_category;
+    
+    const char* suggested_filename = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 12));
+    if (suggested_filename) metadata.suggested_filename = suggested_filename;
 
     sqlite3_finalize(stmt);
     return metadata;
@@ -363,7 +424,7 @@ std::vector<FileMetadata> MetadataStore::list_all_files() {
                   << VECTOR_DIMENSION << " floats, got " << blob_size / sizeof(float) << "."
                   << std::endl;
       }
-      metadata.vector_embedding.assign(
+      metadata.summary_vector_embedding.assign(
           reinterpret_cast<const float *>(vector_blob),
           reinterpret_cast<const float *>(vector_blob) + (blob_size / sizeof(float)));
     }
@@ -413,7 +474,7 @@ void MetadataStore::rebuild_faiss_index() {
   int current_num_vectors = 0;
 
   // Fetch all IDs and vectors from the database
-  std::string sql = "SELECT id, vector FROM files WHERE vector IS NOT NULL";
+  std::string sql = "SELECT id, summary_vector_blob FROM files WHERE summary_vector_blob IS NOT NULL";
   sqlite3_stmt *stmt;
   int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
   if (rc != SQLITE_OK) {

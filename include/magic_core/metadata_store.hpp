@@ -18,15 +18,23 @@
 
 namespace magic_core {
 
-struct FileMetadata {
+struct BasicFileMetadata {
   int id = 0;
   std::string path;
+  std::string original_path;
   std::string content_hash;
   std::chrono::system_clock::time_point last_modified;
   std::chrono::system_clock::time_point created_at;
   FileType file_type;
   size_t file_size = 0;
-  std::vector<float> vector_embedding;
+  std::string processing_status = "IDLE";
+  std::string tags;
+};
+
+struct FileMetadata : public BasicFileMetadata {
+  std::vector<float> summary_vector_embedding;
+  std::string suggested_category;
+  std::string suggested_filename;
 };
 
 struct SearchResult {
@@ -71,13 +79,17 @@ class MetadataStore {
   // Add or update file metadata (now including vector embedding)
   void upsert_file_metadata(const FileMetadata &metadata);
 
-  // Add or update chunk information, supports batching
-  void upsert_chunk_metadata(const int file_id, const std::vector<ChunkWithEmbedding> &chunks);
+  int create_file_stub(const BasicFileMetadata &basic_metadata);
 
-  // Get file metadata by path
+  void update_file_ai_analysis(int file_id, 
+                               const std::vector<float> &summary_vector,
+                               const std::string &suggested_category = "",
+                               const std::string &suggested_filename = "");
+
+  void upsert_chunk_metadata(int file_id, const std::vector<ChunkWithEmbedding> &chunks);
+
   std::optional<FileMetadata> get_file_metadata(const std::string &path);
 
-  // Get file metadata by ID (Faiss returns IDs, so this is crucial)
   std::optional<FileMetadata> get_file_metadata(int id);
 
   // Delete file metadata
