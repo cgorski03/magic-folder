@@ -35,8 +35,10 @@ class FileInfoServiceTest : public magic_tests::MetadataStoreTestBase {
     test_files_.push_back(magic_tests::TestUtilities::create_test_file_metadata(
         "/test/file2.md", "def456", magic_core::FileType::Markdown, 2048, false));
 
-    // Populate the metadata store
-    magic_tests::TestUtilities::populate_metadata_store(metadata_store_, test_files_);
+    // Populate the metadata store using new API
+    for (const auto& file : test_files_) {
+      magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file);
+    }
   }
 
   std::unique_ptr<FileInfoService> file_info_service_;
@@ -83,7 +85,7 @@ TEST_F(FileInfoServiceTest, ListFiles_PreservesVectorEmbeddings) {
   auto file_with_vector = magic_tests::TestUtilities::create_test_file_metadata(
       "/test/file_with_vector.txt", "vector123", magic_core::FileType::Text, 512, true);
 
-  metadata_store_->upsert_file_metadata(file_with_vector);
+  magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file_with_vector);
 
   // Act
   auto result = file_info_service_->list_files();
@@ -97,10 +99,10 @@ TEST_F(FileInfoServiceTest, ListFiles_PreservesVectorEmbeddings) {
   });
   ASSERT_NE(vector_file_it, result.end());
 
-  EXPECT_EQ(vector_file_it->vector_embedding.size(), 1024);
+  EXPECT_EQ(vector_file_it->summary_vector_embedding.size(), 1024);
   // Check that vector is properly preserved (non-zero values)
-  EXPECT_GT(vector_file_it->vector_embedding[0], 0.0f);
-  EXPECT_GT(vector_file_it->vector_embedding[100], 0.0f);
+  EXPECT_GT(vector_file_it->summary_vector_embedding[0], 0.0f);
+  EXPECT_GT(vector_file_it->summary_vector_embedding[100], 0.0f);
 }
 
 // Test get_file_info() method
@@ -135,7 +137,7 @@ TEST_F(FileInfoServiceTest, GetFileInfo_HandlesRelativePaths) {
   auto relative_file = magic_tests::TestUtilities::create_test_file_metadata(
       "relative/path/file.txt", "rel123", magic_core::FileType::Text, 512, false);
 
-  metadata_store_->upsert_file_metadata(relative_file);
+  magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, relative_file);
 
   std::filesystem::path test_path = "relative/path/file.txt";
 
@@ -215,7 +217,10 @@ TEST_F(FileInfoServiceTest, ListFiles_HandlesLargeDataset) {
   // Arrange - add many more files using utilities
   auto large_dataset =
       magic_tests::TestUtilities::create_test_dataset(100, "/test/large_dataset", false);
-  magic_tests::TestUtilities::populate_metadata_store(metadata_store_, large_dataset);
+  
+  for (const auto& file : large_dataset) {
+    magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file);
+  }
 
   // Act
   auto result = file_info_service_->list_files();
@@ -242,7 +247,7 @@ TEST_F(FileInfoServiceTest, GetFileInfo_ReflectsUpdates) {
   auto updated_file = magic_tests::TestUtilities::create_test_file_metadata(
       "/test/file1.txt", "updated_hash", magic_core::FileType::Text, 2048, false);
 
-  metadata_store_->upsert_file_metadata(updated_file);
+  magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, updated_file);
 
   // Act
   auto result = file_info_service_->get_file_info("/test/file1.txt");
@@ -259,20 +264,20 @@ TEST_F(FileInfoServiceTest, GetFileInfo_PreservesVectorEmbedding) {
   auto file_with_vector = magic_tests::TestUtilities::create_test_file_metadata(
       "/test/vector_file.txt", "vector456", magic_core::FileType::Text, 1024, true);
 
-  metadata_store_->upsert_file_metadata(file_with_vector);
+  magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file_with_vector);
 
   // Act
   auto result = file_info_service_->get_file_info("/test/vector_file.txt");
 
   // Assert
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result->vector_embedding.size(), 1024);
+  EXPECT_EQ(result->summary_vector_embedding.size(), 1024);
 
   // Check that vector values are reasonable (deterministic based on path)
-  EXPECT_GT(result->vector_embedding[0], 0.0f);
-  EXPECT_LT(result->vector_embedding[0], 1.0f);
-  EXPECT_GT(result->vector_embedding[100], 0.0f);
-  EXPECT_LT(result->vector_embedding[100], 1.0f);
+  EXPECT_GT(result->summary_vector_embedding[0], 0.0f);
+  EXPECT_LT(result->summary_vector_embedding[0], 1.0f);
+  EXPECT_GT(result->summary_vector_embedding[100], 0.0f);
+  EXPECT_LT(result->summary_vector_embedding[100], 1.0f);
 }
 
 }  // namespace magic_services

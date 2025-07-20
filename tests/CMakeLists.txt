@@ -8,8 +8,9 @@ find_package(GTest CONFIG REQUIRED)
 set(TEST_SOURCES
     test_main.cpp
     test_utilities.cpp
-    test_file_info_service.cpp
-    test_file_delete_service.cpp
+    db/test_file_info_service.cpp
+    db/test_file_delete_service.cpp
+    db/test_metadata_store.cpp
     test_file_processing_service.cpp
     test_search_service.cpp
 )
@@ -52,6 +53,12 @@ add_custom_target(test_file_delete_service
     COMMAND magic_folder_tests --gtest_filter="FileDeleteServiceTest.*"
     DEPENDS magic_folder_tests
     COMMENT "Running FileDeleteService tests only"
+)
+
+add_custom_target(test_metadata_store
+    COMMAND magic_folder_tests --gtest_filter="MetadataStoreTest.*"
+    DEPENDS magic_folder_tests
+    COMMENT "Running MetadataStore tests only"
 )
 
 add_custom_target(test_file_processing_service

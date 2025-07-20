@@ -32,7 +32,7 @@ class ContentExtractorFactory {
    * @return A constant reference to the appropriate ContentExtractor.
    * @throw std::runtime_error if no suitable extractor is found.
    */
-  const ContentExtractor& get_extractor_for(const std::filesystem::path& file_path) const;
+  virtual const ContentExtractor& get_extractor_for(const std::filesystem::path& file_path) const;
 
   // A factory is a unique object that shouldn't be copied or moved.
   // We explicitly delete these operations to prevent misuse.

@@ -53,28 +53,28 @@ class SearchServiceTest : public magic_tests::MetadataStoreTestBase {
     std::vector<magic_core::FileMetadata> test_files;
 
     // File 1: Machine learning related
-    auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/ml_algorithms.txt");
-    file1.vector_embedding = create_test_embedding_with_values({0.9f, 0.8f, 0.7f, 0.6f});
+    auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/ml_algorithms.txt", "hash1", magic_core::FileType::Text, 1024, true);
+    file1.summary_vector_embedding = create_test_embedding_with_values({0.9f, 0.8f, 0.7f, 0.6f});
     test_files.push_back(file1);
 
     // File 2: Programming related
-    auto file2 = magic_tests::TestUtilities::create_test_file_metadata("/src/main.cpp");
-    file2.vector_embedding = create_test_embedding_with_values({0.1f, 0.2f, 0.3f, 0.4f});
+    auto file2 = magic_tests::TestUtilities::create_test_file_metadata("/src/main.cpp", "hash2", magic_core::FileType::Code, 1024, true);
+    file2.summary_vector_embedding = create_test_embedding_with_values({0.1f, 0.2f, 0.3f, 0.4f});
     test_files.push_back(file2);
 
     // File 3: Documentation related
-    auto file3 = magic_tests::TestUtilities::create_test_file_metadata("/docs/README.md");
-    file3.vector_embedding = create_test_embedding_with_values({0.5f, 0.5f, 0.5f, 0.5f});
+    auto file3 = magic_tests::TestUtilities::create_test_file_metadata("/docs/README.md", "hash3", magic_core::FileType::Markdown, 1024, true);
+    file3.summary_vector_embedding = create_test_embedding_with_values({0.5f, 0.5f, 0.5f, 0.5f});
     test_files.push_back(file3);
 
     // File 4: Another ML file (similar to file 1)
-    auto file4 = magic_tests::TestUtilities::create_test_file_metadata("/docs/neural_networks.txt");
-    file4.vector_embedding = create_test_embedding_with_values({0.85f, 0.75f, 0.65f, 0.55f});
+    auto file4 = magic_tests::TestUtilities::create_test_file_metadata("/docs/neural_networks.txt", "hash4", magic_core::FileType::Text, 1024, true);
+    file4.summary_vector_embedding = create_test_embedding_with_values({0.85f, 0.75f, 0.65f, 0.55f});
     test_files.push_back(file4);
 
-    // Add files to metadata store
+    // Add files to metadata store using new API
     for (const auto& file : test_files) {
-      metadata_store_->upsert_file_metadata(file);
+      magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file);
     }
 
     // Rebuild the Faiss index

@@ -2,6 +2,7 @@
 build/
 build-*/
 *.cmake
+.cache/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
@@ -37,9 +38,6 @@ Makefile
 .env
 data/
 
-# Rust (from previous project)
-target/
-Cargo.lock
 
 # Watched files
 watched_files/

@@ -4,6 +4,9 @@ set(MAGIC_CORE_SOURCES
     metadata_store.cpp
     file_watcher.cpp
     extractors/content_extractor_factory.cpp
+    extractors/content_extractor.cpp
+    extractors/markdown_extractor.cpp
+    extractors/plaintext_extractor.cpp
     types.cpp
 )
 

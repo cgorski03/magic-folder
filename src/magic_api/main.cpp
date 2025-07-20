@@ -5,7 +5,6 @@
 #include "magic_api/config.hpp"
 #include "magic_api/routes.hpp"
 #include "magic_api/server.hpp"
-#include "magic_core/content_extractor.hpp"
 #include "magic_core/metadata_store.hpp"
 #include "magic_core/ollama_client.hpp"
 #include "magic_services/file_delete_service.hpp"
@@ -31,10 +30,13 @@ int main() {
     // Initialize core components
     auto ollama_client = std::make_shared<magic_core::OllamaClient>(ollama_server_url, model);
     auto metadata_store = std::make_shared<magic_core::MetadataStore>(metadata_path);
-    auto content_extractor = std::make_shared<magic_core::ContentExtractor>();
+    auto content_extractor_factory = std::make_shared<magic_core::ContentExtractorFactory>();
 
     auto file_processing_service = std::make_shared<magic_services::FileProcessingService>(
-        metadata_store, content_extractor, ollama_client);
+        metadata_store, 
+        content_extractor_factory,
+        ollama_client
+    );
     auto file_delete_service = std::make_shared<magic_services::FileDeleteService>(metadata_store);
     auto file_info_service = std::make_shared<magic_services::FileInfoService>(metadata_store);
     auto search_service =

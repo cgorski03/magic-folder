@@ -29,30 +29,60 @@ void TestUtilities::cleanup_temp_db(const std::filesystem::path& db_path) {
   }
 }
 
-magic_core::FileMetadata TestUtilities::create_test_file_metadata(const std::string& path,
-                                                                  const std::string& content_hash,
-                                                                  magic_core::FileType file_type,
-                                                                  size_t file_size,
-                                                                  bool include_vector) {
-  magic_core::FileMetadata metadata;
+magic_core::BasicFileMetadata TestUtilities::create_test_basic_file_metadata(
+    const std::string& path,
+    const std::string& content_hash,
+    magic_core::FileType file_type,
+    size_t file_size,
+    const std::string& processing_status,
+    const std::string& original_path,
+    const std::string& tags) {
+  
+  magic_core::BasicFileMetadata metadata;
   metadata.path = path;
+  metadata.original_path = original_path.empty() ? path : original_path;
   metadata.content_hash = content_hash;
   metadata.file_type = file_type;
   metadata.file_size = file_size;
+  metadata.processing_status = processing_status;
+  metadata.tags = tags;
+
+  auto now = std::chrono::system_clock::now();
+  metadata.last_modified = now;
+  metadata.created_at = now - std::chrono::hours(1);  // Created 1 hour ago
+
+  return metadata;
+}
+
+magic_core::FileMetadata TestUtilities::create_test_file_metadata(
+    const std::string& path,
+    const std::string& content_hash,
+    magic_core::FileType file_type,
+    size_t file_size,
+    bool include_vector,
+    const std::string& processing_status,
+    const std::string& original_path,
+    const std::string& tags,
+    const std::string& suggested_category,
+    const std::string& suggested_filename) {
+  
+  magic_core::FileMetadata metadata;
+  metadata.path = path;
+  metadata.original_path = original_path.empty() ? path : original_path;
+  metadata.content_hash = content_hash;
+  metadata.file_type = file_type;
+  metadata.file_size = file_size;
+  metadata.processing_status = processing_status;
+  metadata.tags = tags;
+  metadata.suggested_category = suggested_category;
+  metadata.suggested_filename = suggested_filename;
 
   auto now = std::chrono::system_clock::now();
   metadata.last_modified = now;
   metadata.created_at = now - std::chrono::hours(1);  // Created 1 hour ago
 
   if (include_vector) {
-    // Create a deterministic 1024-dimension vector based on the path hash
-    metadata.vector_embedding.resize(1024);
-    std::hash<std::string> hasher;
-    size_t path_hash = hasher(path);
-
-    for (int i = 0; i < 1024; ++i) {
-      metadata.vector_embedding[i] = static_cast<float>((path_hash + i) % 1000) / 1000.0f;
-    }
+    metadata.summary_vector_embedding = create_test_vector(path, 1024);
   }
 
   return metadata;
@@ -75,11 +105,85 @@ std::vector<magic_core::FileMetadata> TestUtilities::create_test_dataset(int cou
   return dataset;
 }
 
-void TestUtilities::populate_metadata_store(std::shared_ptr<magic_core::MetadataStore> store,
-                                            const std::vector<magic_core::FileMetadata>& files) {
-  for (const auto& file : files) {
-    store->upsert_file_metadata(file);
+std::vector<float> TestUtilities::create_test_vector(const std::string& seed_text, int dimension) {
+  std::vector<float> vector;
+  vector.resize(dimension);
+  
+  std::hash<std::string> hasher;
+  size_t seed_hash = hasher(seed_text);
+
+  for (int i = 0; i < dimension; ++i) {
+    vector[i] = static_cast<float>((seed_hash + i) % 1000) / 1000.0f;
   }
+
+  return vector;
+}
+
+magic_core::ChunkWithEmbedding TestUtilities::create_test_chunk_with_embedding(
+    const std::string& content, int chunk_index, const std::string& seed_text) {
+  
+  magic_core::ChunkWithEmbedding chunk_with_embedding;
+  chunk_with_embedding.chunk.content = content;
+  chunk_with_embedding.chunk.chunk_index = chunk_index;
+  chunk_with_embedding.embedding = create_test_vector(seed_text + "_chunk_" + std::to_string(chunk_index), 1024);
+  
+  return chunk_with_embedding;
+}
+
+std::vector<magic_core::ChunkWithEmbedding> TestUtilities::create_test_chunks(
+    int count, const std::string& base_content) {
+  
+  std::vector<magic_core::ChunkWithEmbedding> chunks;
+  chunks.reserve(count);
+
+  for (int i = 0; i < count; ++i) {
+    std::string content = base_content + " " + std::to_string(i);
+    chunks.push_back(create_test_chunk_with_embedding(content, i, base_content));
+  }
+
+  return chunks;
+}
+
+void TestUtilities::populate_metadata_store_with_stubs(
+    std::shared_ptr<magic_core::MetadataStore> store,
+    const std::vector<magic_core::BasicFileMetadata>& files) {
+  
+  for (const auto& file : files) {
+    store->create_file_stub(file);
+  }
+}
+
+int TestUtilities::create_complete_file_in_store(
+    std::shared_ptr<magic_core::MetadataStore> store,
+    const magic_core::FileMetadata& metadata,
+    const std::vector<magic_core::ChunkWithEmbedding>& chunks) {
+  
+  // First create the basic stub
+  magic_core::BasicFileMetadata basic_metadata;
+  basic_metadata.path = metadata.path;
+  basic_metadata.original_path = metadata.original_path;
+  basic_metadata.content_hash = metadata.content_hash;
+  basic_metadata.last_modified = metadata.last_modified;
+  basic_metadata.created_at = metadata.created_at;
+  basic_metadata.file_type = metadata.file_type;
+  basic_metadata.file_size = metadata.file_size;
+  basic_metadata.processing_status = metadata.processing_status;
+  basic_metadata.tags = metadata.tags;
+
+  int file_id = store->create_file_stub(basic_metadata);
+
+  // Update with AI analysis if there's a summary vector
+  if (!metadata.summary_vector_embedding.empty()) {
+    store->update_file_ai_analysis(file_id, metadata.summary_vector_embedding,
+                                   metadata.suggested_category, metadata.suggested_filename);
+  }
+
+  // Add chunks if provided
+  if (!chunks.empty()) {
+    store->upsert_chunk_metadata(file_id, chunks);
+  }
+
+  return file_id;
 }
 
 }  // namespace magic_tests

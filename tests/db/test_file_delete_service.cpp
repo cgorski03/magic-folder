@@ -33,8 +33,10 @@ class FileDeleteServiceTest : public magic_tests::MetadataStoreTestBase {
     test_files_.push_back(magic_tests::TestUtilities::create_test_file_metadata(
         "/test/file_with_vector.cpp", "vector123", magic_core::FileType::Code, 512, true));
 
-    // Populate the metadata store
-    magic_tests::TestUtilities::populate_metadata_store(metadata_store_, test_files_);
+    // Populate the metadata store using new API
+    for (const auto& file : test_files_) {
+      magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file);
+    }
   }
 
   std::unique_ptr<FileDeleteService> file_delete_service_;
@@ -93,7 +95,7 @@ TEST_F(FileDeleteServiceTest, DeleteFile_HandlesFileWithVectorEmbedding) {
   ASSERT_TRUE(metadata_store_->file_exists(test_path));
   auto file_before = metadata_store_->get_file_metadata(test_path);
   ASSERT_TRUE(file_before.has_value());
-  ASSERT_EQ(file_before->vector_embedding.size(), 1024);
+  ASSERT_EQ(file_before->summary_vector_embedding.size(), 1024);
 
   // Act
   file_delete_service_->delete_file(test_path);
@@ -124,7 +126,7 @@ TEST_F(FileDeleteServiceTest, DeleteFile_HandlesRelativePaths) {
   // Arrange - Add a file with a relative path
   auto relative_file = magic_tests::TestUtilities::create_test_file_metadata(
       "relative/path/file.txt", "rel123", magic_core::FileType::Text, 512, false);
-  metadata_store_->upsert_file_metadata(relative_file);
+  magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, relative_file);
 
   std::filesystem::path relative_path = "relative/path/file.txt";
 
