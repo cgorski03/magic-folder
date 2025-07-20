@@ -11,6 +11,10 @@ set(TEST_SOURCES
     db/test_file_info_service.cpp
     db/test_file_delete_service.cpp
     db/test_metadata_store.cpp
+    extractors/test_content_extractor.cpp
+    extractors/test_markdown_extractor.cpp
+    extractors/test_plaintext_extractor.cpp
+    extractors/test_content_extractor_factory.cpp
     test_file_processing_service.cpp
     test_search_service.cpp
 )
@@ -59,6 +63,36 @@ add_custom_target(test_metadata_store
     COMMAND magic_folder_tests --gtest_filter="MetadataStoreTest.*"
     DEPENDS magic_folder_tests
     COMMENT "Running MetadataStore tests only"
+)
+
+add_custom_target(test_extractors
+    COMMAND magic_folder_tests --gtest_filter="*ExtractorTest*"
+    DEPENDS magic_folder_tests
+    COMMENT "Running all extractor tests"
+)
+
+add_custom_target(test_content_extractor
+    COMMAND magic_folder_tests --gtest_filter="ContentExtractorTest.*"
+    DEPENDS magic_folder_tests
+    COMMENT "Running ContentExtractor tests only"
+)
+
+add_custom_target(test_markdown_extractor
+    COMMAND magic_folder_tests --gtest_filter="MarkdownExtractorTest.*"
+    DEPENDS magic_folder_tests
+    COMMENT "Running MarkdownExtractor tests only"
+)
+
+add_custom_target(test_plaintext_extractor
+    COMMAND magic_folder_tests --gtest_filter="PlainTextExtractorTest.*"
+    DEPENDS magic_folder_tests
+    COMMENT "Running PlainTextExtractor tests only"
+)
+
+add_custom_target(test_content_extractor_factory
+    COMMAND magic_folder_tests --gtest_filter="ContentExtractorFactoryTest.*"
+    DEPENDS magic_folder_tests
+    COMMENT "Running ContentExtractorFactory tests only"
 )
 
 add_custom_target(test_file_processing_service
