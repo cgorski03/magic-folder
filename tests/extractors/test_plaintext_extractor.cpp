@@ -113,7 +113,6 @@ TEST_F(PlainTextExtractorTest, GetChunks_SingleSmallParagraph) {
 
   // Act
   auto chunks = extractor_->get_chunks(file);
-
   // Assert
   EXPECT_EQ(chunks.size(), 1);
   EXPECT_EQ(chunks[0].chunk_index, 0);
@@ -138,7 +137,7 @@ TEST_F(PlainTextExtractorTest, GetChunks_SingleParagraphAtMinSize) {
 // Test multiple small paragraphs that should merge
 TEST_F(PlainTextExtractorTest, GetChunks_SmallParagraphs_MergingBehavior) {
   // Arrange - Multiple paragraphs that individually are small but together exceed MIN_SIZE
-  size_t para_size = TestableExtractor::MIN_SIZE / 4; // Each paragraph is 1/4 of minimum
+  size_t para_size = TestableExtractor::MIN_SIZE / 3 + 1;
   std::vector<size_t> sizes = {para_size, para_size, para_size, para_size / 2}; // 4 small paragraphs
   std::string content = create_paragraphs_with_breaks(sizes, {'a', 'b', 'c', 'd'});
   
@@ -146,7 +145,9 @@ TEST_F(PlainTextExtractorTest, GetChunks_SmallParagraphs_MergingBehavior) {
 
   // Act
   auto chunks = extractor_->get_chunks(file);
-
+  for (const auto& chunk : chunks) {
+    std::cout << "Chunk: " << chunk.content << std::endl;
+  }
   // Assert
   // First 3 paragraphs should merge (together they exceed MIN_SIZE)
   // Last paragraph should be separate due to "last section" rule

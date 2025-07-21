@@ -100,7 +100,7 @@ TEST_F(ContentExtractorTest, GetContentHash_EmptyFile) {
 
   // Assert
   EXPECT_EQ(hash.length(), 64); // SHA256 is 64 hex characters
-  EXPECT_EQ(hash, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"); // SHA256 of empty string
+  EXPECT_EQ(hash, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 }
 
 TEST_F(ContentExtractorTest, GetContentHash_SmallFile) {
@@ -112,7 +112,7 @@ TEST_F(ContentExtractorTest, GetContentHash_SmallFile) {
 
   // Assert
   EXPECT_EQ(hash.length(), 64);
-  EXPECT_EQ(hash, "2cf24dba4f21d4288094c99fa9c6f33e4e6e4f2e9c4e75b7b1bbcb1f9e4b8a2c"); // SHA256 of "hello"
+  EXPECT_EQ(hash, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
 }
 
 TEST_F(ContentExtractorTest, GetContentHash_MediumFile) {

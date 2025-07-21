@@ -33,7 +33,7 @@ std::vector<Chunk> PlainTextExtractor::get_chunks(const std::filesystem::path& f
 
     // This regex finds one or more blank lines, which act as paragraph separators.
     // \n\s*\n matches a newline, followed by any whitespace, followed by another newline.
-    const std::regex paragraph_regex(R"(\n\s*\n)", std::regex_constants::ECMAScript);
+    const std::regex paragraph_regex(R"(\n\s*\n)", std::regex_constants::ECMAScript | std::regex_constants::multiline);
 
     std::vector<long> split_points;
     split_points.push_back(0);
@@ -43,10 +43,11 @@ std::vector<Chunk> PlainTextExtractor::get_chunks(const std::filesystem::path& f
 
     for (std::sregex_iterator i = sections_begin; i != sections_end; ++i) {
         // We want to split *after* the blank lines, so we add the match length.
-        split_points.push_back(i->position() + i->length());
+        long split_pos = i->position() + i->length();
+        split_points.push_back(split_pos);
     }
     split_points.push_back(content.length());
-
+    
     // The merging and fallback logic is identical to the robust MarkdownExtractor
     std::vector<Chunk> final_chunks;
     int current_chunk_index = 0;
@@ -60,11 +61,11 @@ std::vector<Chunk> PlainTextExtractor::get_chunks(const std::filesystem::path& f
         if (length == 0) continue;
 
         std::string semantic_section = content.substr(start, length);
+
         merged_chunk_buffer << semantic_section;
 
         if (merged_chunk_buffer.str().length() >= MIN_CHUNK_SIZE || i == split_points.size() - 2) {
             std::string current_chunk_content = merged_chunk_buffer.str();
-
             // If the merged chunk is too large, apply the fixed-size fallback
             if (current_chunk_content.length() > MAX_CHUNK_SIZE) {
                 std::vector<std::string> smaller_chunks = split_into_fixed_chunks(current_chunk_content);

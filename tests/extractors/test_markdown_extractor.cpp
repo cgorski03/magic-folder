@@ -148,18 +148,21 @@ TEST_F(MarkdownExtractorTest, GetChunks_ExactlyMinimumSize_SingleChunk) {
 TEST_F(MarkdownExtractorTest, GetChunks_SmallSections_MergingBehavior) {
   // Arrange - Multiple small sections that individually are below MIN_SIZE
   // but when merged together exceed MIN_SIZE
-  size_t section_size = TestableExtractor::MIN_SIZE / 3; // Each section is 1/3 of minimum
+  size_t section_size = TestableExtractor::MIN_SIZE / 3 + 9; // Each section is 1/3 of minimum plus a little more so it will exceed MIN_SIZE
   
   std::string section1 = create_markdown_section("Section One", section_size, 'a');
   std::string section2 = create_markdown_subsection("Section Two", section_size, 'b'); 
   std::string section3 = create_markdown_subsection("Section Three", section_size / 2, 'c'); // Smaller last section
   
   std::string content = section1 + "\n\n" + section2 + "\n\n" + section3;
+  std::cout << "Content: " << content << std::endl;
   auto file = create_test_file("merging.md", content);
 
   // Act
   auto chunks = extractor_->get_chunks(file);
-
+  for (const auto& chunk : chunks) {
+    std::cout << "Chunk: " << chunk.content << std::endl;
+  }
   // Assert
   // First two sections should merge (together they exceed MIN_SIZE)
   // Last section should be separate due to "last section" rule

@@ -23,7 +23,8 @@ std::vector<Chunk> MarkdownExtractor::get_chunks(const std::filesystem::path& fi
     return {};
   }
 
-  const std::regex heading_regex(R"(^#+\s.*)", std::regex_constants::ECMAScript);
+
+  const std::regex heading_regex(R"(^#+\s.*)", std::regex_constants::ECMAScript | std::regex_constants::multiline);
 
   std::vector<long> split_points;
   split_points.push_back(0);
@@ -52,9 +53,10 @@ std::vector<Chunk> MarkdownExtractor::get_chunks(const std::filesystem::path& fi
 
     // Add the new section to our temporary buffer
     merged_chunk_buffer << semantic_section;
+    
 
     // Check if the merged buffer is now large enough to be a chunk
-    if (merged_chunk_buffer.str().length() >= MIN_CHUNK_SIZE || i == split_points.size() - 2) {
+    if (merged_chunk_buffer.str().length() >= MIN_CHUNK_SIZE) {
       std::string current_chunk_content = merged_chunk_buffer.str();
 
       if (current_chunk_content.length() <= MAX_CHUNK_SIZE) {
@@ -72,6 +74,23 @@ std::vector<Chunk> MarkdownExtractor::get_chunks(const std::filesystem::path& fi
       merged_chunk_buffer.str("");
       merged_chunk_buffer.clear();
     }
+  }
+
+  // Handle any remaining content in the buffer
+  if (!merged_chunk_buffer.str().empty()) {
+    std::string remaining_content = merged_chunk_buffer.str();
+    
+    if (remaining_content.length() <= MAX_CHUNK_SIZE) {
+      final_chunks.push_back(
+          {.content = remaining_content, .chunk_index = current_chunk_index++});
+    } else {
+      // Apply fixed-size fallback for large remaining content
+      std::vector<std::string> smaller_chunks = split_into_fixed_chunks(remaining_content);
+      for (const auto& small_chunk : smaller_chunks) {
+        final_chunks.push_back({.content = small_chunk, .chunk_index = current_chunk_index++});
+      }
+    }
+  } else {
   }
 
   return final_chunks;

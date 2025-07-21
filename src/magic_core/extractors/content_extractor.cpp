@@ -61,16 +61,22 @@ std::string ContentExtractor::get_content_hash(const fs::path& file_path) const 
  * @brief Implements the fixed-size chunking strategy as a fallback.
  *
  */
-std::vector<std::string> ContentExtractor::split_into_fixed_chunks(const std::string& text) const {
-  std::vector<std::string> chunks;
-  if (text.empty()) {
+ std::vector<std::string> ContentExtractor::split_into_fixed_chunks(const std::string& text) const {
+    std::vector<std::string> chunks;
+    if (text.empty()) {
+      return chunks;
+    }
+  
+    // If text is smaller than or equal to FIXED_CHUNK_SIZE, return as single chunk
+    if (text.length() <= FIXED_CHUNK_SIZE) {
+      chunks.push_back(text);
+      return chunks;
+    }
+  
+    const size_t step = FIXED_CHUNK_SIZE - OVERLAP_SIZE;
+    for (size_t i = 0; i < text.length(); i += step) {
+      chunks.push_back(text.substr(i, FIXED_CHUNK_SIZE));
+    }
     return chunks;
   }
-
-  const size_t step = FIXED_CHUNK_SIZE - OVERLAP_SIZE;
-  for (size_t i = 0; i < text.length(); i += step) {
-    chunks.push_back(text.substr(i, FIXED_CHUNK_SIZE));
-  }
-  return chunks;
-}
 }  // namespace magic_core
