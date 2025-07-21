@@ -36,7 +36,7 @@ TEST_F(MetadataStoreTest, CreateFileStub_BasicFunctionality) {
   ASSERT_TRUE(retrieved.has_value());
   EXPECT_EQ(retrieved->id, file_id);
   EXPECT_EQ(retrieved->path, "/test/stub.txt");
-  EXPECT_EQ(retrieved->content_hash, "hash123");
+  EXPECT_EQ(retrieved->file_hash, "hash123");
   EXPECT_EQ(retrieved->processing_status, "PROCESSING");
   EXPECT_EQ(retrieved->file_type, FileType::Text);
   EXPECT_EQ(retrieved->file_size, 1024);
@@ -200,7 +200,7 @@ TEST_F(MetadataStoreTest, GetFileMetadata_ByPath) {
   ASSERT_TRUE(retrieved.has_value());
   EXPECT_EQ(retrieved->id, file_id);
   EXPECT_EQ(retrieved->path, "/test/get_by_path.txt");
-  EXPECT_EQ(retrieved->content_hash, "get_hash");
+  EXPECT_EQ(retrieved->file_hash, "get_hash");
   EXPECT_EQ(retrieved->summary_vector_embedding.size(), 1024);
 }
 
@@ -217,7 +217,7 @@ TEST_F(MetadataStoreTest, GetFileMetadata_ById) {
   ASSERT_TRUE(retrieved.has_value());
   EXPECT_EQ(retrieved->id, file_id);
   EXPECT_EQ(retrieved->path, "/test/get_by_id.txt");
-  EXPECT_EQ(retrieved->content_hash, "get_id_hash");
+  EXPECT_EQ(retrieved->file_hash, "get_id_hash");
 }
 
 TEST_F(MetadataStoreTest, GetFileMetadata_NonExistentReturnsNullopt) {

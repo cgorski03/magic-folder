@@ -290,11 +290,6 @@ TEST_F(ContentExtractorTest, ChunkingConstants_AreReasonable) {
   EXPECT_GT(MockContentExtractor::TEST_MAX_CHUNK_SIZE, 0);
   EXPECT_GT(MockContentExtractor::TEST_FIXED_CHUNK_SIZE, 0);
   
-  // Print constants for debugging (helpful when constants change)
-  std::cout << "MIN_CHUNK_SIZE: " << MockContentExtractor::TEST_MIN_CHUNK_SIZE << std::endl;
-  std::cout << "MAX_CHUNK_SIZE: " << MockContentExtractor::TEST_MAX_CHUNK_SIZE << std::endl;
-  std::cout << "FIXED_CHUNK_SIZE: " << MockContentExtractor::TEST_FIXED_CHUNK_SIZE << std::endl;
-  std::cout << "OVERLAP_SIZE: " << MockContentExtractor::TEST_OVERLAP_SIZE << std::endl;
 }
 
 } // namespace magic_core

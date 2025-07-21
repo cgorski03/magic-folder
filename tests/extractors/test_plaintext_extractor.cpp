@@ -25,7 +25,7 @@ class PlainTextExtractorTest : public magic_tests::MetadataStoreTestBase {
     // Clean up test files
     if (std::filesystem::exists(test_dir_)) {
       std::filesystem::remove_all(test_dir_);
-    }
+    } 
     MetadataStoreTestBase::TearDown();
   }
 

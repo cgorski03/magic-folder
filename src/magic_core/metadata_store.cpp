@@ -152,7 +152,7 @@ int MetadataStore::create_file_stub(const BasicFileMetadata &basic_metadata) {
 
   sqlite3_bind_text(stmt, 1, basic_metadata.path.c_str(), -1, SQLITE_STATIC);
   sqlite3_bind_text(stmt, 2, basic_metadata.original_path.c_str(), -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 3, basic_metadata.content_hash.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 3, basic_metadata.file_hash.c_str(), -1, SQLITE_STATIC);
   sqlite3_bind_text(stmt, 4, basic_metadata.processing_status.c_str(), -1, SQLITE_STATIC);
   sqlite3_bind_text(stmt, 5, basic_metadata.tags.c_str(), -1, SQLITE_STATIC);
   sqlite3_bind_text(stmt, 6, last_modified_str.c_str(), -1, SQLITE_STATIC);
@@ -277,7 +277,7 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &
     const char* original_path = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
     if (original_path) metadata.original_path = original_path;
     
-    metadata.content_hash = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
+    metadata.file_hash = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
     
     const char* processing_status = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4));
     if (processing_status) metadata.processing_status = processing_status;
@@ -343,7 +343,7 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(int id) {
     const char* original_path = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
     if (original_path) metadata.original_path = original_path;
     
-    metadata.content_hash = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
+    metadata.file_hash = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
     
     const char* processing_status = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4));
     if (processing_status) metadata.processing_status = processing_status;
@@ -394,7 +394,7 @@ bool MetadataStore::file_exists(const std::string &path) {
 std::vector<FileMetadata> MetadataStore::list_all_files() {
   std::vector<FileMetadata> files;
   std::string sql =
-      "SELECT id, path, content_hash, last_modified, created_at, file_type, file_size, vector FROM "
+      "SELECT id, path, file_hash, last_modified, created_at, file_type, file_size, summary_vector_blob FROM "
       "files";
 
   sqlite3_stmt *stmt;
@@ -407,7 +407,7 @@ std::vector<FileMetadata> MetadataStore::list_all_files() {
     FileMetadata metadata;
     metadata.id = sqlite3_column_int(stmt, 0);
     metadata.path = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
-    metadata.content_hash = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
+    metadata.file_hash = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
     metadata.last_modified =
         string_to_time_point(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
     metadata.created_at =

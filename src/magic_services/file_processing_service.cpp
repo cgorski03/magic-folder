@@ -33,7 +33,7 @@ magic_services::ProcessFileResult FileProcessingService::process_file(
       basic_file_metadata.processing_status = "PROCESSING";
       basic_file_metadata.tags = "";
       basic_file_metadata.file_type = magic_core::file_type_from_string(file_path.extension().string());
-      basic_file_metadata.content_hash = content_hash;
+      basic_file_metadata.file_hash = content_hash;
       
       int file_id = metadata_store_->create_file_stub(basic_file_metadata);
       
@@ -62,7 +62,7 @@ magic_services::ProcessFileResult FileProcessingService::process_file(
       metadata_store_->update_file_ai_analysis(file_id, {}, "", "");
       
     return ProcessFileResult::success_response(file_path, basic_file_metadata.file_size,
-                                               basic_file_metadata.content_hash,
+                                               basic_file_metadata.file_hash,
                                                to_string(basic_file_metadata.file_type));
 
 }

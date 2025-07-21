@@ -128,7 +128,7 @@ inline magic_core::BasicFileMetadata create_test_basic_metadata(
   magic_core::BasicFileMetadata metadata;
   metadata.path = path;
   metadata.original_path = path;
-  metadata.content_hash = content_hash;
+  metadata.file_hash = content_hash;
   metadata.file_type = file_type;
   metadata.file_size = file_size;
   metadata.processing_status = processing_status;
@@ -153,7 +153,7 @@ inline magic_core::FileMetadata create_test_complete_metadata(
   magic_core::FileMetadata metadata;
   metadata.path = path;
   metadata.original_path = path;
-  metadata.content_hash = content_hash;
+  metadata.file_hash = content_hash;
   metadata.file_type = file_type;
   metadata.file_size = file_size;
   metadata.processing_status = "COMPLETED";

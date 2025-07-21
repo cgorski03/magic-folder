@@ -22,7 +22,7 @@ struct BasicFileMetadata {
   int id = 0;
   std::string path;
   std::string original_path;
-  std::string content_hash;
+  std::string file_hash;
   std::chrono::system_clock::time_point last_modified;
   std::chrono::system_clock::time_point created_at;
   FileType file_type;

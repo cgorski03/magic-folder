@@ -41,7 +41,7 @@ magic_core::BasicFileMetadata TestUtilities::create_test_basic_file_metadata(
   magic_core::BasicFileMetadata metadata;
   metadata.path = path;
   metadata.original_path = original_path.empty() ? path : original_path;
-  metadata.content_hash = content_hash;
+  metadata.file_hash = content_hash;
   metadata.file_type = file_type;
   metadata.file_size = file_size;
   metadata.processing_status = processing_status;
@@ -69,7 +69,7 @@ magic_core::FileMetadata TestUtilities::create_test_file_metadata(
   magic_core::FileMetadata metadata;
   metadata.path = path;
   metadata.original_path = original_path.empty() ? path : original_path;
-  metadata.content_hash = content_hash;
+  metadata.file_hash = content_hash;
   metadata.file_type = file_type;
   metadata.file_size = file_size;
   metadata.processing_status = processing_status;
@@ -162,7 +162,7 @@ int TestUtilities::create_complete_file_in_store(
   magic_core::BasicFileMetadata basic_metadata;
   basic_metadata.path = metadata.path;
   basic_metadata.original_path = metadata.original_path;
-  basic_metadata.content_hash = metadata.content_hash;
+  basic_metadata.file_hash = metadata.file_hash;
   basic_metadata.last_modified = metadata.last_modified;
   basic_metadata.created_at = metadata.created_at;
   basic_metadata.file_type = metadata.file_type;
