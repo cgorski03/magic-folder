@@ -1,14 +1,9 @@
 #include <gtest/gtest.h>
-
-#include <algorithm>
-#include <chrono>
-#include <filesystem>
 #include <memory>
 #include <optional>
 #include <vector>
 
 #include "magic_core/metadata_store.hpp"
-#include "magic_core/types.hpp"
 #include "test_utilities.hpp"
 
 namespace magic_core {
