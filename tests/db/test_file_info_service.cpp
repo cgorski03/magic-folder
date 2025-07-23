@@ -243,7 +243,15 @@ TEST_F(FileInfoServiceTest, ListFiles_HandlesLargeDataset) {
 
 // Test file update scenarios
 TEST_F(FileInfoServiceTest, GetFileInfo_ReflectsUpdates) {
-  // Arrange - update an existing file using utilities
+  // Arrange - Update the existing file instead of creating a new one
+  
+  // First, get the existing file ID
+  auto existing_file = metadata_store_->get_file_metadata("/test/file1.txt");
+  ASSERT_TRUE(existing_file.has_value());
+  
+  // Delete and recreate to simulate an update
+  metadata_store_->delete_file_metadata("/test/file1.txt");
+  
   auto updated_file = magic_tests::TestUtilities::create_test_file_metadata(
       "/test/file1.txt", "updated_hash", magic_core::FileType::Text, 2048, false);
 
