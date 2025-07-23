@@ -207,6 +207,12 @@ void MetadataStore::update_file_ai_analysis(int file_id,
     throw MetadataStoreError("Failed to execute statement: " + std::string(sqlite3_errmsg(db_)));
   }
 
+  // Check if any rows were actually updated
+  if (sqlite3_changes(db_) == 0) {
+    sqlite3_finalize(stmt);
+    throw MetadataStoreError("File with ID " + std::to_string(file_id) + " not found");
+  }
+
   sqlite3_finalize(stmt);
 }
 
