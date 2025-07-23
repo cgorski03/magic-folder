@@ -1,20 +1,32 @@
-# Magic Core Library
+# Magic Core Library (including all subdirectories)
+
+# Root level sources
 set(MAGIC_CORE_SOURCES
-    ollama_client.cpp
-    metadata_store.cpp
-    file_watcher.cpp
-    extractors/content_extractor_factory.cpp
-    extractors/content_extractor.cpp
-    extractors/markdown_extractor.cpp
-    extractors/plaintext_extractor.cpp
     types.cpp
 )
 
+# Automatically find all source files in subdirectories
+file(GLOB_RECURSE SERVICES_SOURCES "services/*.cpp")
+file(GLOB_RECURSE EXTRACTORS_SOURCES "extractors/*.cpp") 
+file(GLOB_RECURSE LLM_SOURCES "llm/*.cpp")
+file(GLOB_RECURSE DB_SOURCES "db/*.cpp")
+file(GLOB_RECURSE ASYNC_SOURCES "async/*.cpp")
+
+# Combine all sources
+list(APPEND MAGIC_CORE_SOURCES 
+    ${SERVICES_SOURCES}
+    ${EXTRACTORS_SOURCES}
+    ${LLM_SOURCES}
+    ${DB_SOURCES}
+    ${ASYNC_SOURCES}
+)
 
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
 find_package(OpenMP REQUIRED)
+
 # Create the library
 add_library(magic_core STATIC ${MAGIC_CORE_SOURCES})
+
 # Link libraries
 target_link_libraries(magic_core
     PUBLIC

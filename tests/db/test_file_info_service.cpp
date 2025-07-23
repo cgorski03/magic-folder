@@ -3,17 +3,16 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
-#include <fstream>
 #include <memory>
 #include <optional>
 #include <set>
 #include <vector>
 
-#include "magic_core/metadata_store.hpp"
-#include "magic_services/file_info_service.hpp"
+#include "magic_core/db/metadata_store.hpp"
+#include "magic_core/services/file_info_service.hpp"
 #include "test_utilities.hpp"
 
-namespace magic_services {
+namespace magic_core {
 
 class FileInfoServiceTest : public magic_tests::MetadataStoreTestBase {
  protected:
@@ -288,4 +287,4 @@ TEST_F(FileInfoServiceTest, GetFileInfo_PreservesVectorEmbedding) {
   EXPECT_LT(result->summary_vector_embedding[100], 1.0f);
 }
 
-}  // namespace magic_services
+}  // namespace magic_core

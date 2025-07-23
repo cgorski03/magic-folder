@@ -1,10 +1,10 @@
 #pragma once
 
 #include <filesystem>
-#include <magic_core/metadata_store.hpp>
+#include <magic_core/db/metadata_store.hpp>
 #include <memory>
 
-namespace magic_services {
+namespace magic_core {
 
 class FileDeleteService {
  public:
@@ -17,4 +17,4 @@ class FileDeleteService {
   std::shared_ptr<magic_core::MetadataStore> metadata_store_;
 };
 
-}  // namespace magic_services
+} 

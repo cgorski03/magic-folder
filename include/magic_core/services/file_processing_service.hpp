@@ -2,11 +2,11 @@
 
 #include <filesystem>
 #include <magic_core/extractors/content_extractor_factory.hpp>
-#include <magic_core/metadata_store.hpp>
-#include <magic_core/ollama_client.hpp>
+#include <magic_core/db/metadata_store.hpp>
+#include <magic_core/llm/ollama_client.hpp>
 #include <memory>
 
-namespace magic_services {
+namespace magic_core {
 
 struct ProcessFileResult {
   bool success;

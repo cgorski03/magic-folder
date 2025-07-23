@@ -1,5 +1,4 @@
-#include "magic_core/metadata_store.hpp"
-
+#include "magic_core/db/metadata_store.hpp"
 #include <faiss/IndexHNSW.h>
 #include <faiss/IndexIDMap.h>
 #include <iomanip>

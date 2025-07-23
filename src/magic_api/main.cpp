@@ -5,12 +5,12 @@
 #include "magic_api/config.hpp"
 #include "magic_api/routes.hpp"
 #include "magic_api/server.hpp"
-#include "magic_core/metadata_store.hpp"
-#include "magic_core/ollama_client.hpp"
-#include "magic_services/file_delete_service.hpp"
-#include "magic_services/file_info_service.hpp"
-#include "magic_services/file_processing_service.hpp"
-#include "magic_services/search_service.hpp"
+#include "magic_core/db/metadata_store.hpp"
+#include "magic_core/llm/ollama_client.hpp"
+#include "magic_core/services/file_delete_service.hpp"
+#include "magic_core/services/file_info_service.hpp"
+#include "magic_core/services/file_processing_service.hpp"
+#include "magic_core/services/search_service.hpp"
 
 int main() {
   try {
@@ -32,15 +32,15 @@ int main() {
     auto metadata_store = std::make_shared<magic_core::MetadataStore>(metadata_path);
     auto content_extractor_factory = std::make_shared<magic_core::ContentExtractorFactory>();
 
-    auto file_processing_service = std::make_shared<magic_services::FileProcessingService>(
+    auto file_processing_service = std::make_shared<magic_core::FileProcessingService>(
         metadata_store, 
         content_extractor_factory,
         ollama_client
     );
-    auto file_delete_service = std::make_shared<magic_services::FileDeleteService>(metadata_store);
-    auto file_info_service = std::make_shared<magic_services::FileInfoService>(metadata_store);
+    auto file_delete_service = std::make_shared<magic_core::FileDeleteService>(metadata_store);
+    auto file_info_service = std::make_shared<magic_core::FileInfoService>(metadata_store);
     auto search_service =
-        std::make_shared<magic_services::SearchService>(metadata_store, ollama_client);
+        std::make_shared<magic_core::SearchService>(metadata_store, ollama_client);
 
     // Parse server URL
     size_t colon_pos = server_url.find(':');

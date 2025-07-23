@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "magic_core/metadata_store.hpp"
+#include "magic_core/db/metadata_store.hpp"
 
 namespace magic_tests {
 

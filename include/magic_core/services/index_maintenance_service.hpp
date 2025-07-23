@@ -2,11 +2,11 @@
 
 #include <atomic>
 #include <chrono>
-#include <magic_core/metadata_store.hpp>
+#include <magic_core/db/metadata_store.hpp>
 #include <memory>
 #include <thread>
 
-namespace magic_services {
+namespace magic_core {
 namespace background {
 
 class IndexMaintenanceService {
@@ -28,4 +28,4 @@ class IndexMaintenanceService {
 };
 
 }  // namespace background
-}  // namespace magic_services
+}  // namespace magic_core

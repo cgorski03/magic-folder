@@ -1,7 +1,7 @@
-#include "magic_services/file_processing_service.hpp"
-#include "magic_core/metadata_store.hpp"
+#include "magic_core/services/file_processing_service.hpp"
+#include "magic_core/db/metadata_store.hpp"
 
-namespace magic_services {
+namespace magic_core {
 
   auto to_sys_time = [](std::filesystem::file_time_type ftime) {
   return std::chrono::time_point_cast<std::chrono::system_clock::duration>(
@@ -16,7 +16,7 @@ FileProcessingService::FileProcessingService(
       content_extractor_factory_(content_extractor_factory),
       ollama_client_(ollama_client) {}
 
-magic_services::ProcessFileResult FileProcessingService::process_file(
+magic_core::ProcessFileResult FileProcessingService::process_file(
     const std::filesystem::path &file_path) {
       
       const magic_core::ContentExtractor& extractor = content_extractor_factory_->get_extractor_for(file_path);

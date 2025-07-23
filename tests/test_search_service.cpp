@@ -6,13 +6,13 @@
 #include <memory>
 #include <vector>
 
-#include "magic_core/metadata_store.hpp"
-#include "magic_core/ollama_client.hpp"
-#include "magic_services/search_service.hpp"
+#include "magic_core/db/metadata_store.hpp"
+#include "magic_core/llm/ollama_client.hpp"
+#include "magic_core/services/search_service.hpp"
 #include "test_mocks.hpp"
 #include "test_utilities.hpp"
 
-namespace magic_services {
+namespace magic_core {
 
 class SearchServiceTest : public magic_tests::MetadataStoreTestBase {
  protected:
@@ -24,7 +24,7 @@ class SearchServiceTest : public magic_tests::MetadataStoreTestBase {
     mock_ollama_client_ = std::make_shared<magic_tests::MockOllamaClient>();
 
     // Create the service with mocked dependencies
-    search_service_ = std::make_unique<SearchService>(metadata_store_, mock_ollama_client_);
+    search_service_ = std::make_unique<magic_core::SearchService>(metadata_store_, mock_ollama_client_);
 
     // Initialize the metadata store
     metadata_store_->initialize();
@@ -341,4 +341,4 @@ TEST_F(SearchServiceTest, Search_MultipleQueries) {
   }
 }
 
-}  // namespace magic_services
+}  // namespace magic_core

@@ -1,9 +1,4 @@
-#include "magic_core/ollama_client.hpp"
-
-#include <iostream>
-#include <sstream>
-#include <thread>
-
+#include "magic_core/llm/ollama_client.hpp"
 #include "ollama.hpp"
 
 namespace magic_core {

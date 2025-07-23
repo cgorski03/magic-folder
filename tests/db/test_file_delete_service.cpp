@@ -4,11 +4,11 @@
 #include <memory>
 #include <vector>
 
-#include "magic_core/metadata_store.hpp"
-#include "magic_services/file_delete_service.hpp"
+#include "magic_core/db/metadata_store.hpp"
+#include "magic_core/services/file_delete_service.hpp"
 #include "test_utilities.hpp"
 
-namespace magic_services {
+namespace magic_core {
 
 class FileDeleteServiceTest : public magic_tests::MetadataStoreTestBase {
  protected:
@@ -204,4 +204,4 @@ TEST_F(FileDeleteServiceTest, ServiceProperlyDelegatesToMetadataStore) {
   EXPECT_NO_THROW(metadata_store_->delete_file_metadata(test_path));
 }
 
-}  // namespace magic_services
+}  // namespace magic_core

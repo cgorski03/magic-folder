@@ -1,12 +1,12 @@
 #pragma once
 
 #include <filesystem>
-#include <magic_core/metadata_store.hpp>
+#include <magic_core/db/metadata_store.hpp>
 #include <memory>
 #include <optional>
 #include <vector>
 
-namespace magic_services {
+namespace magic_core {
 
 class FileInfoService {
  public:
@@ -20,4 +20,4 @@ class FileInfoService {
   std::shared_ptr<magic_core::MetadataStore> metadata_store_;
 };
 
-}  // namespace magic_services
+}

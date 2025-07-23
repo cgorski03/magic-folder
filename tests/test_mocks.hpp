@@ -4,8 +4,8 @@
 
 #include "magic_core/extractors/content_extractor.hpp"
 #include "magic_core/extractors/content_extractor_factory.hpp"
-#include "magic_core/metadata_store.hpp"
-#include "magic_core/ollama_client.hpp"
+#include "magic_core/db/metadata_store.hpp"
+#include "magic_core/llm/ollama_client.hpp"
 #include "magic_core/types/chunk.hpp"
 
 namespace magic_tests {

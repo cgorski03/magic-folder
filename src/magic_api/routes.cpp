@@ -3,16 +3,16 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 
-#include "magic_services/file_delete_service.hpp"
-#include "magic_services/file_info_service.hpp"
-#include "magic_services/file_processing_service.hpp"
-#include "magic_services/search_service.hpp"
+#include "magic_core/services/file_delete_service.hpp"
+#include "magic_core/services/file_info_service.hpp"
+#include "magic_core/services/file_processing_service.hpp"
+#include "magic_core/services/search_service.hpp"
 
 namespace magic_api {
-Routes::Routes(std::shared_ptr<magic_services::FileProcessingService> file_processing_service,
-               std::shared_ptr<magic_services::FileDeleteService> file_delete_service,
-               std::shared_ptr<magic_services::FileInfoService> file_info_service,
-               std::shared_ptr<magic_services::SearchService> search_service)
+Routes::Routes(std::shared_ptr<magic_core::FileProcessingService> file_processing_service,
+               std::shared_ptr<magic_core::FileDeleteService> file_delete_service,
+               std::shared_ptr<magic_core::FileInfoService> file_info_service,
+               std::shared_ptr<magic_core::SearchService> search_service)
     : file_processing_service_(file_processing_service),
       file_delete_service_(file_delete_service),
       file_info_service_(file_info_service),
@@ -65,7 +65,7 @@ crow::response Routes::handle_process_file(const crow::request &req) {
   try {
     std::string file_path = extract_file_path_from_request(req);
     std::cout << "Processing file: " << file_path << std::endl;
-    magic_services::ProcessFileResult result = file_processing_service_->process_file(file_path);
+    magic_core::ProcessFileResult result = file_processing_service_->process_file(file_path);
     if (!result.success) {
       std::cout << "Processing file failed: " << file_path << std::endl;
       return create_json_response(create_error_response(result.error_message), 400);

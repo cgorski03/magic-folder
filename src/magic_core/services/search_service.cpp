@@ -1,6 +1,6 @@
-#include "magic_services/search_service.hpp"
+#include "magic_core/services/search_service.hpp"
 
-namespace magic_services {
+namespace magic_core {
 
 SearchService::SearchService(std::shared_ptr<magic_core::MetadataStore> metadata_store,
                              std::shared_ptr<magic_core::OllamaClient> ollama_client)
@@ -25,4 +25,4 @@ std::vector<magic_core::SearchResult> SearchService::search(const std::string &q
 std::vector<float> SearchService::embed_query(const std::string &query) {
   return ollama_client_->get_embedding(query);
 }
-}  // namespace magic_services
+}  // namespace magic_core

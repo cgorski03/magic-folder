@@ -26,7 +26,6 @@ add_executable(magic_folder_tests ${TEST_SOURCES})
 target_link_libraries(magic_folder_tests 
     PRIVATE
     magic_core
-    magic_services
     GTest::gtest 
     GTest::gtest_main
     GTest::gmock
