@@ -20,6 +20,13 @@ class ContentExtractorError : public std::exception {
  private:
   std::string message_;
 };
+
+// Add this struct after the ContentExtractorError class
+struct ExtractionResult {
+  std::string content_hash;
+  std::vector<Chunk> chunks;
+};
+
 class ContentExtractor {
  public:
   virtual ~ContentExtractor() = default;
@@ -30,9 +37,16 @@ class ContentExtractor {
   // opens, reads, and chunks the file
   virtual std::vector<Chunk> get_chunks(const fs::path& file_path) const = 0;
 
-  std::string get_content_hash(const fs::path& file_path) const;
+  // Combined operation - gets both hash and chunks in single file read
+  virtual ExtractionResult extract_with_hash(const fs::path& file_path) const = 0;
 
- protected:
+  std::string get_content_hash(const fs::path& file_path) const;
+  
+  protected:
+  // Helper method for derived classes to compute hash from loaded content
+  std::string get_string_content(const fs::path& file_path) const;
+  std::string compute_hash_from_content(const std::string& content) const;
+  
   // --- Token-based goals ---
   static constexpr size_t TARGET_MAX_TOKENS = 512; 
   static constexpr size_t TARGET_MIN_TOKENS = 32;

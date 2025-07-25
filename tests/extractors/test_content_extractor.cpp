@@ -17,6 +17,7 @@ class MockContentExtractor : public ContentExtractor {
  public:
   MOCK_METHOD(bool, can_handle, (const std::filesystem::path& file_path), (const, override));
   MOCK_METHOD(std::vector<Chunk>, get_chunks, (const std::filesystem::path& file_path), (const, override));
+  MOCK_METHOD(ExtractionResult, extract_with_hash, (const std::filesystem::path& file_path), (const, override));
   
   // Expose protected constants for testing
   static constexpr size_t TEST_MIN_CHUNK_SIZE = MIN_CHUNK_SIZE;
@@ -26,6 +27,7 @@ class MockContentExtractor : public ContentExtractor {
   
   // Expose protected method for testing
   using ContentExtractor::split_into_fixed_chunks;
+  using ContentExtractor::compute_hash_from_content;
 };
 
 class ContentExtractorTest : public magic_tests::MetadataStoreTestBase {

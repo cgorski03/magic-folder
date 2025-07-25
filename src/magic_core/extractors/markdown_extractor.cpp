@@ -1,30 +1,44 @@
 #include "magic_core/extractors/markdown_extractor.hpp"
 
-#include <fstream>
 #include <regex>
 #include <sstream>
-#include <stdexcept>
 
 namespace magic_core {
 bool MarkdownExtractor::can_handle(const std::filesystem::path& file_path) const {
   return file_path.extension() == ".md";
 }
 
-std::vector<Chunk> MarkdownExtractor::get_chunks(const std::filesystem::path& file_path) const {
-  std::ifstream file_stream(file_path);
-  if (!file_stream.is_open()) {
-    throw std::runtime_error("Could not open file: " + file_path.string());
-  }
-  std::stringstream buffer;
-  buffer << file_stream.rdbuf();
-  const std::string content = buffer.str();
+// New combined method - single file read for both hash and chunks
+ExtractionResult MarkdownExtractor::extract_with_hash(const std::filesystem::path& file_path) const {
+  std::string content = get_string_content(file_path);
 
+  if (content.empty()) {
+    return {"", {}};
+  }
+
+  // Compute hash from loaded content (no additional file read!)
+  std::string content_hash = compute_hash_from_content(content);
+  
+  // Extract chunks from the same loaded content
+  std::vector<Chunk> chunks = extract_chunks_from_content(content);
+  
+  return {content_hash, chunks};
+}
+
+// Legacy method - now uses the new architecture
+std::vector<Chunk> MarkdownExtractor::get_chunks(const std::filesystem::path& file_path) const {
+  auto result = extract_with_hash(file_path);
+  return result.chunks;
+}
+
+// Helper method that processes already-loaded content
+std::vector<Chunk> MarkdownExtractor::extract_chunks_from_content(const std::string& content) const {
   if (content.empty()) {
     return {};
   }
 
-
-  const std::regex heading_regex(R"(^#+\s.*)", std::regex_constants::ECMAScript | std::regex_constants::multiline);
+  const std::regex heading_regex(
+      R"(^#+\s.*)", std::regex_constants::ECMAScript | std::regex_constants::multiline);
 
   std::vector<long> split_points;
   split_points.push_back(0);
@@ -81,8 +95,7 @@ std::vector<Chunk> MarkdownExtractor::get_chunks(const std::filesystem::path& fi
     std::string remaining_content = merged_chunk_buffer.str();
     
     if (remaining_content.length() <= MAX_CHUNK_SIZE) {
-      final_chunks.push_back(
-          {.content = remaining_content, .chunk_index = current_chunk_index++});
+      final_chunks.push_back({.content = remaining_content, .chunk_index = current_chunk_index++});
     } else {
       // Apply fixed-size fallback for large remaining content
       std::vector<std::string> smaller_chunks = split_into_fixed_chunks(remaining_content);
@@ -95,4 +108,4 @@ std::vector<Chunk> MarkdownExtractor::get_chunks(const std::filesystem::path& fi
 
   return final_chunks;
 }
-} 
+}  // namespace magic_core

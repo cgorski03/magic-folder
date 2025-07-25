@@ -20,9 +20,10 @@ magic_core::ProcessFileResult FileProcessingService::process_file(
     const std::filesystem::path &file_path) {
       
       const magic_core::ContentExtractor& extractor = content_extractor_factory_->get_extractor_for(file_path);
-      // First, we will insert the basic file metadata
-      // compute the content hash
-      std::string content_hash = extractor.get_content_hash(file_path);
+      
+      // SINGLE file read for both hash and chunks! (Performance optimization)
+      auto extraction_result = extractor.extract_with_hash(file_path);
+      
       magic_core::BasicFileMetadata basic_file_metadata;
       
       basic_file_metadata.path = file_path;
@@ -33,18 +34,16 @@ magic_core::ProcessFileResult FileProcessingService::process_file(
       basic_file_metadata.processing_status = "PROCESSING";
       basic_file_metadata.tags = "";
       basic_file_metadata.file_type = magic_core::file_type_from_string(file_path.extension().string());
-      basic_file_metadata.file_hash = content_hash;
+      basic_file_metadata.file_hash = extraction_result.content_hash; // From same read
       
       int file_id = metadata_store_->create_file_stub(basic_file_metadata);
       
-      // Then we will get the chunks from the extractor
-      std::vector<Chunk> chunks = extractor.get_chunks(file_path);
-      
+      // Use chunks from same read (no additional file I/O)
       std::vector<magic_core::ChunkWithEmbedding> chunks_with_embedding = {};
 
       // Then we will get the embeddings for the chunks
       // This will be made more efficient with thread pool in future
-      for (const auto& chunk : chunks) {
+      for (const auto& chunk : extraction_result.chunks) {
         std::vector<float> embedding = ollama_client_->get_embedding(chunk.content);
         chunks_with_embedding.push_back({chunk, embedding});
         // check here if the length of this vector is the batch size

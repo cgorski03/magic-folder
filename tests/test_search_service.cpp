@@ -20,8 +20,15 @@ class SearchServiceTest : public magic_tests::MetadataStoreTestBase {
     // Call parent setup to initialize metadata_store_
     MetadataStoreTestBase::SetUp();
 
-    // Create mock Ollama client
-    mock_ollama_client_ = std::make_shared<magic_tests::MockOllamaClient>();
+    // Check if Ollama server is running before setting up tests
+    try {
+      // Try to create the mock client - this will fail if server isn't running
+      mock_ollama_client_ = std::make_shared<magic_tests::MockOllamaClient>();
+    } catch (const magic_core::OllamaError& e) {
+      // Server not running - skip all tests in this fixture
+      GTEST_SKIP() << "Ollama server not available: " << e.what();
+      return;
+    }
 
     // Create the service with mocked dependencies
     search_service_ = std::make_unique<magic_core::SearchService>(metadata_store_, mock_ollama_client_);

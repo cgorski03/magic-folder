@@ -331,7 +331,7 @@ TEST_F(MarkdownExtractorTest, GetChunks_NonExistentFile) {
   auto non_existent = test_dir_ / "does_not_exist.md";
 
   // Act & Assert
-  EXPECT_THROW(extractor_->get_chunks(non_existent), std::runtime_error);
+  EXPECT_THROW(extractor_->get_chunks(non_existent), ContentExtractorError);
 }
 
 // Test with different line ending formats

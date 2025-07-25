@@ -8,12 +8,20 @@
 
 namespace magic_core {
 
-std::string ContentExtractor::get_content_hash(const fs::path& file_path) const {
-  std::ifstream file(file_path, std::ios::binary);
-  if (!file) {
-    throw ContentExtractorError("Failed to open file for hashing: " + file_path.string());
+std::string ContentExtractor::get_string_content(const fs::path& file_path) const {
+  std::ifstream file_stream(file_path);
+  if (!file_stream.is_open()) {
+    throw ContentExtractorError("Could not open file: " + file_path.string());
   }
+  
+  std::stringstream buffer;
+  buffer << file_stream.rdbuf();
+  const std::string content = buffer.str();
+  return content;
+}
 
+// New helper method for computing hash from already-loaded content
+std::string ContentExtractor::compute_hash_from_content(const std::string& content) const {
   EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
   if (!mdctx) {
     throw ContentExtractorError("Failed to create EVP context for hashing");
@@ -24,20 +32,10 @@ std::string ContentExtractor::get_content_hash(const fs::path& file_path) const 
     throw ContentExtractorError("Failed to initialize SHA256 digest");
   }
 
-  char buffer[1024];
-  while (file.read(buffer, sizeof(buffer))) {
-    if (EVP_DigestUpdate(mdctx, buffer, file.gcount()) != 1) {
-      EVP_MD_CTX_free(mdctx);
-      throw ContentExtractorError("Failed to update SHA256 digest");
-    }
-  }
-
-  // Process any remaining bytes (for files smaller than buffer size)
-  if (file.gcount() > 0) {
-    if (EVP_DigestUpdate(mdctx, buffer, file.gcount()) != 1) {
-      EVP_MD_CTX_free(mdctx);
-      throw ContentExtractorError("Failed to update SHA256 digest");
-    }
+  // Hash the entire content at once (no file I/O needed)
+  if (EVP_DigestUpdate(mdctx, content.data(), content.length()) != 1) {
+    EVP_MD_CTX_free(mdctx);
+    throw ContentExtractorError("Failed to update SHA256 digest");
   }
 
   unsigned char hash[EVP_MAX_MD_SIZE];
@@ -55,6 +53,12 @@ std::string ContentExtractor::get_content_hash(const fs::path& file_path) const 
   }
 
   return ss.str();
+}
+
+// Legacy method - now uses the new architecture
+std::string ContentExtractor::get_content_hash(const fs::path& file_path) const {
+  std::string content = get_string_content(file_path);
+  return compute_hash_from_content(content);
 }
 
 /**

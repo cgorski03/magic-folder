@@ -1,8 +1,6 @@
 #include "magic_core/extractors/plaintext_extractor.hpp"
-#include <fstream>
 #include <sstream>
 #include <regex>
-#include <stdexcept>
 
 namespace magic_core {
 
@@ -11,22 +9,37 @@ bool PlainTextExtractor::can_handle(const std::filesystem::path& file_path) cons
     return extension == ".txt";
 }
 
+// New combined method - single file read for both hash and chunks
+ExtractionResult PlainTextExtractor::extract_with_hash(const std::filesystem::path& file_path) const {
+    std::string content = get_string_content(file_path);
+
+    if (content.empty()) {
+        return {"", {}};
+    }
+
+    // Compute hash from loaded content (no additional file read!)
+    std::string content_hash = compute_hash_from_content(content);
+    
+    // Extract chunks from the same loaded content
+    std::vector<Chunk> chunks = extract_chunks_from_content(content);
+    
+    return {content_hash, chunks};
+}
+
+// Legacy method - now uses the new architecture
+std::vector<Chunk> PlainTextExtractor::get_chunks(const std::filesystem::path& file_path) const {
+    auto result = extract_with_hash(file_path);
+    return result.chunks;
+}
+
 /**
- * @brief Extracts and chunks content from a plain text file.
+ * @brief Helper method that processes already-loaded content.
  *
  * This method splits the document by paragraphs (defined as one or more
  * blank lines). It then merges paragraphs that are too short and breaks up
  * paragraphs that are too long, ensuring well-sized, meaningful chunks.
  */
-std::vector<Chunk> PlainTextExtractor::get_chunks(const std::filesystem::path& file_path) const {
-    std::ifstream file_stream(file_path);
-    if (!file_stream.is_open()) {
-        throw std::runtime_error("Could not open file: " + file_path.string());
-    }
-    std::stringstream buffer;
-    buffer << file_stream.rdbuf();
-    const std::string content = buffer.str();
-
+std::vector<Chunk> PlainTextExtractor::extract_chunks_from_content(const std::string& content) const {
     if (content.empty()) {
         return {};
     }
