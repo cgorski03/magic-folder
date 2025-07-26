@@ -174,7 +174,7 @@ void MetadataStore::update_file_ai_analysis(int file_id,
                                            const std::string &suggested_category,
                                            const std::string &suggested_filename) {
   const char *sql = 
-      "UPDATE files SET summary_vector_blob = ?, suggested_category = ?, suggested_filename = ? "
+      "UPDATE files SET summary_vector_blob = ?, suggested_category = ?, suggested_filename = ?, processing_status = 'IDLE'"
       "WHERE id = ?";
 
   sqlite3_stmt *stmt;

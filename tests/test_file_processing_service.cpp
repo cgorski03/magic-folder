@@ -58,7 +58,7 @@ class FileProcessingServiceTest : public magic_tests::MetadataStoreTestBase {
     expected_basic_metadata_.path = test_file_path_;
     expected_basic_metadata_.file_size = std::filesystem::file_size(test_file_path_);
     expected_basic_metadata_.file_hash = "test_hash_123";
-    expected_basic_metadata_.processing_status = "PROCESSING";
+    expected_basic_metadata_.processing_status = "IDLE";
     expected_basic_metadata_.file_type = FileType::Text;
     expected_basic_metadata_.tags = "";
     expected_basic_metadata_.original_path = test_file_path_;
@@ -357,7 +357,7 @@ TEST_F(FileProcessingServiceTest, ProcessFile_FullWorkflow) {
   ASSERT_TRUE(stored_metadata.has_value());
   EXPECT_EQ(stored_metadata->path, test_file_path_);
   EXPECT_EQ(stored_metadata->file_hash, expected_hash);
-  EXPECT_EQ(stored_metadata->processing_status, "PROCESSING");
+  EXPECT_EQ(stored_metadata->processing_status, "IDLE");
   EXPECT_FALSE(stored_metadata->summary_vector_embedding.empty());
   
   // Verify document can be found in search (basic test)
