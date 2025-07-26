@@ -74,6 +74,7 @@ crow::response Routes::handle_process_file(const crow::request &req) {
 
     return create_json_response(response);
   } catch (const std::exception &e) {
+    std::cerr << "Exception in handle_process_file: " << e.what() << std::endl;
     nlohmann::json error_response = create_error_response(e.what());
     return create_json_response(error_response, 400);
   }

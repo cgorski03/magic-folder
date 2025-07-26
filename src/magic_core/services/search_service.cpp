@@ -10,7 +10,7 @@ std::vector<magic_core::SearchResult> SearchService::search(const std::string &q
   try {
     // Convert the query to a vector embedding
     std::vector<float> query_embedding = embed_query(query);
-    
+      
     // Step 2: Use the metadata store to search for similar files
     // The metadata store will use the Faiss index to find the most similar vectors
     std::vector<magic_core::SearchResult> results = metadata_store_->search_similar_files(query_embedding, k);

@@ -149,7 +149,7 @@ void TestUtilities::populate_metadata_store_with_stubs(
     const std::vector<magic_core::BasicFileMetadata>& files) {
   
   for (const auto& file : files) {
-    store->create_file_stub(file);
+    store->upsert_file_stub(file);
   }
 }
 
@@ -170,7 +170,7 @@ int TestUtilities::create_complete_file_in_store(
   basic_metadata.processing_status = metadata.processing_status;
   basic_metadata.tags = metadata.tags;
 
-  int file_id = store->create_file_stub(basic_metadata);
+  int file_id = store->upsert_file_stub(basic_metadata);
 
   // Update with AI analysis if there's a summary vector
   if (!metadata.summary_vector_embedding.empty()) {

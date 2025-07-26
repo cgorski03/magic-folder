@@ -22,7 +22,7 @@ TEST_F(MetadataStoreTest, CreateFileStub_BasicFunctionality) {
       "/test/stub.txt", "hash123", FileType::Text, 1024, "PROCESSING");
 
   // Act
-  int file_id = metadata_store_->create_file_stub(basic_metadata);
+  int file_id = metadata_store_->upsert_file_stub(basic_metadata);
 
   // Assert
   EXPECT_GT(file_id, 0);
@@ -45,7 +45,7 @@ TEST_F(MetadataStoreTest, CreateFileStub_WithAllFields) {
       "/original/path/file.md", "tag1,tag2,important");
 
   // Act
-  int file_id = metadata_store_->create_file_stub(basic_metadata);
+  int file_id = metadata_store_->upsert_file_stub(basic_metadata);
 
   // Assert
   auto retrieved = metadata_store_->get_file_metadata(file_id);
@@ -63,10 +63,10 @@ TEST_F(MetadataStoreTest, CreateFileStub_DuplicatePathThrows) {
   auto metadata2 =
       magic_tests::TestUtilities::create_test_basic_file_metadata("/test/duplicate.txt", "hash2");
 
-  metadata_store_->create_file_stub(metadata1);
+  metadata_store_->upsert_file_stub(metadata1);
 
   // Act & Assert
-  EXPECT_THROW(metadata_store_->create_file_stub(metadata2), MetadataStoreError);
+  EXPECT_THROW(metadata_store_->upsert_file_stub(metadata2), MetadataStoreError);
 }
 
 // Tests for update_file_ai_analysis
@@ -74,7 +74,7 @@ TEST_F(MetadataStoreTest, UpdateFileAIAnalysis_BasicFunctionality) {
   // Arrange
   auto basic_metadata =
       magic_tests::TestUtilities::create_test_basic_file_metadata("/test/ai_file.txt", "hash789");
-  int file_id = metadata_store_->create_file_stub(basic_metadata);
+  int file_id = metadata_store_->upsert_file_stub(basic_metadata);
 
   auto test_vector = magic_tests::TestUtilities::create_test_vector("ai_analysis", 1024);
   std::string category = "document";
@@ -100,7 +100,7 @@ TEST_F(MetadataStoreTest, UpdateFileAIAnalysis_EmptyVector) {
   // Arrange
   auto basic_metadata =
       magic_tests::TestUtilities::create_test_basic_file_metadata("/test/no_vector.txt", "hash000");
-  int file_id = metadata_store_->create_file_stub(basic_metadata);
+  int file_id = metadata_store_->upsert_file_stub(basic_metadata);
 
   // Act
   metadata_store_->update_file_ai_analysis(file_id, {}, "category", "filename");
@@ -117,7 +117,7 @@ TEST_F(MetadataStoreTest, UpdateFileAIAnalysis_WrongVectorDimension) {
   // Arrange
   auto basic_metadata = magic_tests::TestUtilities::create_test_basic_file_metadata(
       "/test/bad_vector.txt", "hash111");
-  int file_id = metadata_store_->create_file_stub(basic_metadata);
+  int file_id = metadata_store_->upsert_file_stub(basic_metadata);
 
   std::vector<float> wrong_size_vector(512, 0.5f);  // Wrong dimension
 
@@ -140,7 +140,7 @@ TEST_F(MetadataStoreTest, UpsertChunkMetadata_BasicFunctionality) {
   // Arrange
   auto basic_metadata = magic_tests::TestUtilities::create_test_basic_file_metadata(
       "/test/chunked_file.txt", "chunk_hash");
-  int file_id = metadata_store_->create_file_stub(basic_metadata);
+  int file_id = metadata_store_->upsert_file_stub(basic_metadata);
 
   auto chunks = magic_tests::TestUtilities::create_test_chunks(3, "test content");
 
@@ -156,7 +156,7 @@ TEST_F(MetadataStoreTest, UpsertChunkMetadata_EmptyChunks) {
   // Arrange
   auto basic_metadata = magic_tests::TestUtilities::create_test_basic_file_metadata(
       "/test/no_chunks.txt", "no_chunk_hash");
-  int file_id = metadata_store_->create_file_stub(basic_metadata);
+  int file_id = metadata_store_->upsert_file_stub(basic_metadata);
 
   std::vector<ChunkWithEmbedding> empty_chunks;
 
@@ -168,7 +168,7 @@ TEST_F(MetadataStoreTest, UpsertChunkMetadata_ReplaceExistingChunks) {
   // Arrange
   auto basic_metadata = magic_tests::TestUtilities::create_test_basic_file_metadata(
       "/test/replace_chunks.txt", "replace_hash");
-  int file_id = metadata_store_->create_file_stub(basic_metadata);
+  int file_id = metadata_store_->upsert_file_stub(basic_metadata);
 
   auto initial_chunks = magic_tests::TestUtilities::create_test_chunks(2, "initial content");
   auto updated_chunks = magic_tests::TestUtilities::create_test_chunks(3, "updated content");
@@ -383,7 +383,7 @@ TEST_F(MetadataStoreTest, CompleteWorkflow_FileStubToSearchable) {
   // Act & Assert - Complete workflow
 
   // 1. Create stub
-  int file_id = metadata_store_->create_file_stub(basic_metadata);
+  int file_id = metadata_store_->upsert_file_stub(basic_metadata);
   EXPECT_GT(file_id, 0);
 
   auto after_stub = metadata_store_->get_file_metadata(file_id);

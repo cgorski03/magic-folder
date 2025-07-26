@@ -298,7 +298,7 @@ TEST_F(FileProcessingServiceTest, ProcessFile_MetadataStoreError) {
   // Create a file that already exists to trigger unique constraint error
   auto existing_metadata = magic_tests::TestUtilities::create_test_basic_file_metadata(
       test_file_path_, "existing_hash");
-  metadata_store_->create_file_stub(existing_metadata);
+  metadata_store_->upsert_file_stub(existing_metadata);
   
   // Act & Assert
   EXPECT_THROW(file_processing_service_->process_file(test_file_path_), MetadataStoreError);

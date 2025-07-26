@@ -58,6 +58,27 @@ struct ChunkWithEmbedding {
   std::vector<float> embedding;
 };
 
+enum class ProcessingStatus {
+  IDLE,
+  PROCESSING,
+  FAILED
+};
+inline std::string to_string(ProcessingStatus status) {
+  switch (status) {
+      case ProcessingStatus::IDLE: return "IDLE";
+      case ProcessingStatus::PROCESSING: return "PROCESSING";
+      case ProcessingStatus::FAILED: return "FAILED";
+      default: return "UNKNOWN";
+  }
+}
+
+inline ProcessingStatus processing_status_from_string(const std::string& str) {
+  if (str == "IDLE") return ProcessingStatus::IDLE;
+  if (str == "PROCESSING") return ProcessingStatus::PROCESSING;
+  if (str == "FAILED") return ProcessingStatus::FAILED;
+  throw std::invalid_argument("Unknown ProcessingStatus: " + str);
+}
+
 class MetadataStoreError : public std::exception {
  public:
   explicit MetadataStoreError(const std::string &message) : message_(message) {}
@@ -91,12 +112,13 @@ class MetadataStore {
   // Add or update file metadata (now including vector embedding)
   void upsert_file_metadata(const FileMetadata &metadata);
 
-  int create_file_stub(const BasicFileMetadata &basic_metadata);
+  int upsert_file_stub(const BasicFileMetadata &basic_metadata);
 
   void update_file_ai_analysis(int file_id,
                                const std::vector<float> &summary_vector,
                                const std::string &suggested_category = "",
-                               const std::string &suggested_filename = "");
+                               const std::string &suggested_filename = "",
+                               ProcessingStatus processing_status = ProcessingStatus::IDLE);
 
   void upsert_chunk_metadata(int file_id, const std::vector<ChunkWithEmbedding> &chunks);
 

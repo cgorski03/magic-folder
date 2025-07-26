@@ -22,7 +22,7 @@ class Config {
     config.api_base_url = get_env_or_default("API_BASE_URL", "127.0.0.1:3030");
     config.metadata_db_path = get_env_or_default("METADATA_DB_PATH", "./data/metadata.db");
     config.ollama_url = get_env_or_default("OLLAMA_URL", "http://localhost:11434");
-    config.embedding_model = get_env_or_default("EMBEDDING_MODEL", "nomic-embed-text");
+    config.embedding_model = get_env_or_default("EMBEDDING_MODEL", "mxbai-embed-large");
 
     config.validate();
     return config;
