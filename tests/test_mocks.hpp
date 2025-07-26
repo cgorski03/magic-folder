@@ -29,6 +29,7 @@ class MockContentExtractor : public magic_core::ContentExtractor {
 
   MOCK_METHOD(bool, can_handle, (const std::filesystem::path& file_path), (const, override));
   MOCK_METHOD(std::vector<Chunk>, get_chunks, (const std::filesystem::path& file_path), (const, override));
+  MOCK_METHOD(magic_core::ExtractionResult, extract_with_hash, (const std::filesystem::path& file_path), (const, override));
   // Note: get_content_hash is not virtual in the base class, so we can't mock it directly
 };
 

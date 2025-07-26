@@ -14,7 +14,7 @@ ExtractionResult PlainTextExtractor::extract_with_hash(const std::filesystem::pa
     std::string content = get_string_content(file_path);
 
     if (content.empty()) {
-        return {"", {}};
+        return {"", {}, FileType::Text};
     }
 
     // Compute hash from loaded content (no additional file read!)
@@ -23,7 +23,7 @@ ExtractionResult PlainTextExtractor::extract_with_hash(const std::filesystem::pa
     // Extract chunks from the same loaded content
     std::vector<Chunk> chunks = extract_chunks_from_content(content);
     
-    return {content_hash, chunks};
+    return {content_hash, chunks, FileType::Text};
 }
 
 // Legacy method - now uses the new architecture

@@ -13,6 +13,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
+
 #include "magic_core/types/chunk.hpp"
 #include "magic_core/types/file.hpp"
 
@@ -35,6 +36,15 @@ struct FileMetadata : public BasicFileMetadata {
   std::vector<float> summary_vector_embedding;
   std::string suggested_category;
   std::string suggested_filename;
+};
+
+
+struct SearchChunkMetadata  {
+  int id;
+  std::vector<float> vector_embedding;
+  int file_id;
+  int chunk_index;
+  std::string content;
 };
 
 struct SearchResult {
@@ -62,6 +72,8 @@ class MetadataStoreError : public std::exception {
 
 class MetadataStore {
  public:
+  static constexpr int VECTOR_DIMENSION = 1024;
+
   explicit MetadataStore(const std::filesystem::path &db_path);
   ~MetadataStore();
 
@@ -81,12 +93,14 @@ class MetadataStore {
 
   int create_file_stub(const BasicFileMetadata &basic_metadata);
 
-  void update_file_ai_analysis(int file_id, 
+  void update_file_ai_analysis(int file_id,
                                const std::vector<float> &summary_vector,
                                const std::string &suggested_category = "",
                                const std::string &suggested_filename = "");
 
   void upsert_chunk_metadata(int file_id, const std::vector<ChunkWithEmbedding> &chunks);
+
+  std::vector<SearchChunkMetadata> get_chunk_metadata(std::vector<int> file_ids);
 
   std::optional<FileMetadata> get_file_metadata(const std::string &path);
 
@@ -105,7 +119,6 @@ class MetadataStore {
 
   void rebuild_faiss_index();
 
-
  private:
   std::filesystem::path db_path_;
   sqlite3 *db_;
@@ -115,7 +128,6 @@ class MetadataStore {
 
   // Faiss Index Parameters - since we will support multiple embedding models, these will have to be
   // able to change
-  const int VECTOR_DIMENSION = 1024;
   const int HNSW_M_PARAM = 32;
   const int HNSW_EF_CONSTRUCTION_PARAM = 100;
 

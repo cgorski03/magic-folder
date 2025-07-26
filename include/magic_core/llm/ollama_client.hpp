@@ -28,13 +28,16 @@ class OllamaClient {
 
   // Get embedding for text
   virtual std::vector<float> get_embedding(const std::string &text);
-  virtual std::vector<std::vector<float>> get_embeddings(const std::vector<std::string> &texts_to_embed) {
+  virtual std::vector<std::vector<float>> get_embeddings(
+      const std::vector<std::string> &texts_to_embed) {
     throw std::runtime_error("Not Implemented!");
   }
+  virtual std::string summarize_text(const std::string &text);
 
   virtual bool is_server_available();
 
  private:
+  std::string generate_text();
   std::string ollama_url_;
   std::string embedding_model_;
 

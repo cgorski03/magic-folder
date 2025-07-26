@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "magic_core/types/chunk.hpp"
+#include "magic_core/types/file.hpp"
 
 namespace fs = std::filesystem;
 
@@ -25,6 +26,7 @@ class ContentExtractorError : public std::exception {
 struct ExtractionResult {
   std::string content_hash;
   std::vector<Chunk> chunks;
+  FileType file_type;
 };
 
 class ContentExtractor {

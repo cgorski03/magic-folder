@@ -51,6 +51,12 @@ std::vector<float> OllamaClient::get_embedding(const std::string &text) {
   }
 }
 
+std::string OllamaClient::summarize_text(const std::string &text) {
+  // TODO: Implement text summarization using ollama
+  // For now, return a placeholder
+  return "Summary of: " + text.substr(0, 100) + "...";
+}
+
 bool OllamaClient::is_server_available() {
   return ollama::is_running();
 }

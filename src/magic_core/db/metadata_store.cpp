@@ -259,6 +259,38 @@ void MetadataStore::upsert_chunk_metadata(
         throw MetadataStoreError(errmsg);
 }
 
+std::vector<SearchChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<int> file_ids) {
+  std::vector<SearchChunkMetadata> chunks;
+  
+  if (file_ids.empty()) return chunks;
+  
+  // Build comma-separated string for SQL IN clause
+  std::string file_ids_str;
+  for (size_t i = 0; i < file_ids.size(); ++i) {
+    if (i > 0) file_ids_str += ",";
+    file_ids_str += std::to_string(file_ids[i]);
+  }
+  
+  std::string sql = "SELECT file_id, chunk_index, content FROM chunks WHERE file_id IN (" + file_ids_str + ") ORDER BY file_id, chunk_index";
+  
+  sqlite3_stmt *stmt;
+  int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+  if (rc != SQLITE_OK) {
+    throw MetadataStoreError("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
+  }
+
+  while (sqlite3_step(stmt) == SQLITE_ROW) {
+    SearchChunkMetadata chunk;
+    chunk.file_id = sqlite3_column_int(stmt, 0);
+    chunk.chunk_index = sqlite3_column_int(stmt, 1);
+    chunk.content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
+    chunks.push_back(chunk); 
+  }
+
+  sqlite3_finalize(stmt);
+  return chunks;
+}
+
 std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &path) {
   std::string sql =
       "SELECT id, path, original_path, file_hash, processing_status, tags, "

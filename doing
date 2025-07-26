@@ -1,4 +1,0 @@
-0: Get these tests passing
-Priority 1: Eliminate duplicate file reads (hash during extraction)
-Priority 2: Implement mmap for files >50KB using a hybrid approach
-Priority 3: Consider streaming regex operations for very large files
