@@ -81,6 +81,14 @@ void MetadataStore::initialize() {
     throw MetadataStoreError("Failed to open database: " + std::string(sqlite3_errmsg(db_)));
   }
 
+  // Enable foreign key constraints
+  char* errmsg = nullptr;
+  if (sqlite3_exec(db_, "PRAGMA foreign_keys = ON;", nullptr, nullptr, &errmsg) != SQLITE_OK) {
+      std::string error = errmsg ? errmsg : "Unknown error";
+      sqlite3_free(errmsg);
+      throw MetadataStoreError("Failed to enable foreign keys: " + error);
+  }
+
   create_tables();
   // Always need to build the faiss index on startup
   rebuild_faiss_index();
@@ -148,6 +156,22 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
   std::string last_modified_str = time_point_to_string(basic_metadata.last_modified);
   std::string created_at_str = time_point_to_string(basic_metadata.created_at);
 
+  // Check if file exists BEFORE doing the upsert
+  const char *select_sql = "SELECT id FROM files WHERE path = ?";
+  sqlite3_stmt *select_stmt;
+  int rc = sqlite3_prepare_v2(db_, select_sql, -1, &select_stmt, nullptr);
+  if (rc != SQLITE_OK) {
+    throw MetadataStoreError("Failed to prepare select statement: " + std::string(sqlite3_errmsg(db_)));
+  }
+  
+  sqlite3_bind_text(select_stmt, 1, basic_metadata.path.c_str(), -1, SQLITE_STATIC);
+  int existing_id = -1;
+  if (sqlite3_step(select_stmt) == SQLITE_ROW) {
+    existing_id = sqlite3_column_int(select_stmt, 0);
+  }
+  sqlite3_finalize(select_stmt);
+
+  // Now do the upsert
   const char *sql =
       "INSERT INTO files (path, original_path, file_hash, processing_status, tags, "
       "last_modified, created_at, file_type, file_size) "
@@ -163,7 +187,7 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
       "file_size=excluded.file_size";
 
   sqlite3_stmt *stmt;
-  int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
+  rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
   if (rc != SQLITE_OK) {
     throw MetadataStoreError("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
   }
@@ -184,27 +208,14 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
     throw MetadataStoreError("Failed to execute statement: " + std::string(sqlite3_errmsg(db_)));
   }
 
-  // If we inserted, return the new rowid. If we updated, fetch the id by path.
-  int file_id = static_cast<int>(sqlite3_last_insert_rowid(db_));
-  if (file_id == 0) {
-    // Updated, need to fetch id
-    const char *select_sql = "SELECT id FROM files WHERE path = ?";
-    sqlite3_stmt *select_stmt;
-    int rc2 = sqlite3_prepare_v2(db_, select_sql, -1, &select_stmt, nullptr);
-    if (rc2 != SQLITE_OK) {
-      sqlite3_finalize(stmt);
-      throw MetadataStoreError("Failed to prepare select statement: " +
-                               std::string(sqlite3_errmsg(db_)));
-    }
-    sqlite3_bind_text(select_stmt, 1, basic_metadata.path.c_str(), -1, SQLITE_STATIC);
-    if (sqlite3_step(select_stmt) == SQLITE_ROW) {
-      file_id = sqlite3_column_int(select_stmt, 0);
-    }
-    sqlite3_finalize(select_stmt);
-  }
-
   sqlite3_finalize(stmt);
-  return file_id;
+
+  // Return the correct ID
+  if (existing_id != -1) {
+    return existing_id;  // File existed, return existing ID
+  } else {
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));  // New file, return new ID
+  }
 }
 
 void MetadataStore::update_file_ai_analysis(int file_id,
