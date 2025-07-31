@@ -14,7 +14,7 @@ find_package(OpenSSL REQUIRED)
 
 # Link libraries
 target_link_libraries(magic_api
-    magic_services
+    magic_core
     Crow::Crow
     CURL::libcurl
     nlohmann_json::nlohmann_json

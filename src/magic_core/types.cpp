@@ -29,4 +29,5 @@ FileType file_type_from_string(const std::string& str) {
   return FileType::Unknown;
 }
 
+
 }  // namespace magic_core

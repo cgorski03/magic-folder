@@ -6,13 +6,13 @@
 #include <memory>
 #include <vector>
 
-#include "magic_core/metadata_store.hpp"
-#include "magic_core/ollama_client.hpp"
-#include "magic_services/search_service.hpp"
+#include "magic_core/db/metadata_store.hpp"
+#include "magic_core/llm/ollama_client.hpp"
+#include "magic_core/services/search_service.hpp"
 #include "test_mocks.hpp"
 #include "test_utilities.hpp"
 
-namespace magic_services {
+namespace magic_core {
 
 class SearchServiceTest : public magic_tests::MetadataStoreTestBase {
  protected:
@@ -20,11 +20,18 @@ class SearchServiceTest : public magic_tests::MetadataStoreTestBase {
     // Call parent setup to initialize metadata_store_
     MetadataStoreTestBase::SetUp();
 
-    // Create mock Ollama client
-    mock_ollama_client_ = std::make_shared<magic_tests::MockOllamaClient>();
+    // Check if Ollama server is running before setting up tests
+    try {
+      // Try to create the mock client - this will fail if server isn't running
+      mock_ollama_client_ = std::make_shared<magic_tests::MockOllamaClient>();
+    } catch (const magic_core::OllamaError& e) {
+      // Server not running - skip all tests in this fixture
+      GTEST_SKIP() << "Ollama server not available: " << e.what();
+      return;
+    }
 
     // Create the service with mocked dependencies
-    search_service_ = std::make_unique<SearchService>(metadata_store_, mock_ollama_client_);
+    search_service_ = std::make_unique<magic_core::SearchService>(metadata_store_, mock_ollama_client_);
 
     // Initialize the metadata store
     metadata_store_->initialize();
@@ -53,28 +60,28 @@ class SearchServiceTest : public magic_tests::MetadataStoreTestBase {
     std::vector<magic_core::FileMetadata> test_files;
 
     // File 1: Machine learning related
-    auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/ml_algorithms.txt");
-    file1.vector_embedding = create_test_embedding_with_values({0.9f, 0.8f, 0.7f, 0.6f});
+    auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/ml_algorithms.txt", "hash1", magic_core::FileType::Text, 1024, true);
+    file1.summary_vector_embedding = create_test_embedding_with_values({0.9f, 0.8f, 0.7f, 0.6f});
     test_files.push_back(file1);
 
     // File 2: Programming related
-    auto file2 = magic_tests::TestUtilities::create_test_file_metadata("/src/main.cpp");
-    file2.vector_embedding = create_test_embedding_with_values({0.1f, 0.2f, 0.3f, 0.4f});
+    auto file2 = magic_tests::TestUtilities::create_test_file_metadata("/src/main.cpp", "hash2", magic_core::FileType::Code, 1024, true);
+    file2.summary_vector_embedding = create_test_embedding_with_values({0.1f, 0.2f, 0.3f, 0.4f});
     test_files.push_back(file2);
 
     // File 3: Documentation related
-    auto file3 = magic_tests::TestUtilities::create_test_file_metadata("/docs/README.md");
-    file3.vector_embedding = create_test_embedding_with_values({0.5f, 0.5f, 0.5f, 0.5f});
+    auto file3 = magic_tests::TestUtilities::create_test_file_metadata("/docs/README.md", "hash3", magic_core::FileType::Markdown, 1024, true);
+    file3.summary_vector_embedding = create_test_embedding_with_values({0.5f, 0.5f, 0.5f, 0.5f});
     test_files.push_back(file3);
 
     // File 4: Another ML file (similar to file 1)
-    auto file4 = magic_tests::TestUtilities::create_test_file_metadata("/docs/neural_networks.txt");
-    file4.vector_embedding = create_test_embedding_with_values({0.85f, 0.75f, 0.65f, 0.55f});
+    auto file4 = magic_tests::TestUtilities::create_test_file_metadata("/docs/neural_networks.txt", "hash4", magic_core::FileType::Text, 1024, true);
+    file4.summary_vector_embedding = create_test_embedding_with_values({0.85f, 0.75f, 0.65f, 0.55f});
     test_files.push_back(file4);
 
-    // Add files to metadata store
+    // Add files to metadata store using new API
     for (const auto& file : test_files) {
-      metadata_store_->upsert_file_metadata(file);
+      magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file);
     }
 
     // Rebuild the Faiss index
@@ -265,7 +272,7 @@ TEST_F(SearchServiceTest, Search_ResultStructure) {
   EXPECT_GT(result.id, 0);
   EXPECT_GE(result.distance, 0.0f);
   EXPECT_FALSE(result.file.path.empty());
-  EXPECT_FALSE(result.file.content_hash.empty());
+  EXPECT_FALSE(result.file.file_hash.empty());
 }
 
 // Test error handling when Ollama client fails
@@ -341,4 +348,4 @@ TEST_F(SearchServiceTest, Search_MultipleQueries) {
   }
 }
 
-}  // namespace magic_services
+}  // namespace magic_core

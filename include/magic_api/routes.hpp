@@ -5,21 +5,21 @@
 #include "server.hpp"
 
 // Forward declarations
-namespace magic_services {
+namespace magic_core {
 class FileProcessingService;
 class FileDeleteService;
 class FileInfoService;
 class SearchService;
-}  // namespace magic_services
+}  // namespace magic_core
 
 namespace magic_api {
 
 class Routes {
  public:
-  Routes(std::shared_ptr<magic_services::FileProcessingService> file_processing_service,
-         std::shared_ptr<magic_services::FileDeleteService> file_delete_service,
-         std::shared_ptr<magic_services::FileInfoService> file_info_service,
-         std::shared_ptr<magic_services::SearchService> search_service);
+  Routes(std::shared_ptr<magic_core::FileProcessingService> file_processing_service,
+         std::shared_ptr<magic_core::FileDeleteService> file_delete_service,
+         std::shared_ptr<magic_core::FileInfoService> file_info_service,
+         std::shared_ptr<magic_core::SearchService> search_service);
   ~Routes() = default;
 
   // Disable copy constructor and assignment
@@ -34,10 +34,10 @@ class Routes {
   void register_routes(Server &server);
 
  private:
-  std::shared_ptr<magic_services::FileProcessingService> file_processing_service_;
-  std::shared_ptr<magic_services::FileDeleteService> file_delete_service_;
-  std::shared_ptr<magic_services::FileInfoService> file_info_service_;
-  std::shared_ptr<magic_services::SearchService> search_service_;
+  std::shared_ptr<magic_core::FileProcessingService> file_processing_service_;
+  std::shared_ptr<magic_core::FileDeleteService> file_delete_service_;
+  std::shared_ptr<magic_core::FileInfoService> file_info_service_;
+  std::shared_ptr<magic_core::SearchService> search_service_;
 
   // Route handlers
   crow::response handle_health_check(const crow::request &req);

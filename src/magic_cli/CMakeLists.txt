@@ -9,7 +9,6 @@ add_executable(magic_cli ${MAGIC_CLI_SOURCES})
 
 # Link libraries
 target_link_libraries(magic_cli
-    magic_services
     CURL::libcurl
     nlohmann_json::nlohmann_json
     Threads::Threads
