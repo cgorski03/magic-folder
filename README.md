@@ -244,7 +244,7 @@ TASK_QUEUE_POLL_INTERVAL=1000
 WATCHED_FOLDER=./watched_files
 ```
 
-# Usage
+## Usage
 
 ### 1. Start the API Server
 

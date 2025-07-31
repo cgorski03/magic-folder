@@ -84,6 +84,7 @@ magic_core::ProcessFileResult FileProcessingService::process_file(
 
       // Store the document-level summary embedding (only if we had chunks)
       metadata_store_->update_file_ai_analysis(file_id, document_embedding, "", "", ProcessingStatus::IDLE);
+      metadata_store_->rebuild_faiss_index();
     }
     else {
       // For empty files, don't store any embedding
