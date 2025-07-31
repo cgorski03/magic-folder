@@ -49,6 +49,9 @@ std::vector<float> OllamaClient::get_embedding(const std::string &text) {
     // Wrap ollama-hpp exceptions in your custom exception
     throw OllamaError("Embedding generation failed: " + std::string(e.what()));
   }
+  catch (const nlohmann::json::exception &e) {
+    throw OllamaError("Failed to parse Ollama JSON: " + std::string(e.what()) + text);
+  }
 }
 
 std::string OllamaClient::summarize_text(const std::string &text) {

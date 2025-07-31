@@ -1,5 +1,5 @@
 #include "magic_core/extractors/content_extractor.hpp"
-
+#include <utf8.h>
 #include <openssl/evp.h>
 
 #include <fstream>
@@ -13,7 +13,7 @@ std::string ContentExtractor::get_string_content(const fs::path& file_path) cons
   if (!file_stream.is_open()) {
     throw ContentExtractorError("Could not open file: " + file_path.string());
   }
-  
+
   std::stringstream buffer;
   buffer << file_stream.rdbuf();
   const std::string content = buffer.str();
@@ -65,22 +65,25 @@ std::string ContentExtractor::get_content_hash(const fs::path& file_path) const 
  * @brief Implements the fixed-size chunking strategy as a fallback.
  *
  */
- std::vector<std::string> ContentExtractor::split_into_fixed_chunks(const std::string& text) const {
-    std::vector<std::string> chunks;
-    if (text.empty()) {
-      return chunks;
+std::vector<std::string> ContentExtractor::split_into_fixed_chunks(const std::string& text) const {
+  std::vector<std::string> out;
+  if (text.empty())
+    return out;
+
+  size_t bytes_in_chunk = 0;
+  auto chunk_start = text.begin();
+
+  for (auto it = text.begin(); it != text.end(); utf8::next(it, text.end())) {
+    bytes_in_chunk = it - chunk_start;
+    if (bytes_in_chunk >= FIXED_CHUNK_SIZE - OVERLAP_SIZE) {
+      out.emplace_back(chunk_start, it);  // up to, but *not* including it
+      chunk_start = it;
     }
-  
-    // If text is smaller than or equal to FIXED_CHUNK_SIZE, return as single chunk
-    if (text.length() <= FIXED_CHUNK_SIZE) {
-      chunks.push_back(text);
-      return chunks;
-    }
-  
-    const size_t step = FIXED_CHUNK_SIZE - OVERLAP_SIZE;
-    for (size_t i = 0; i < text.length(); i += step) {
-      chunks.push_back(text.substr(i, FIXED_CHUNK_SIZE));
-    }
-    return chunks;
   }
+  // last chunk
+  if (chunk_start != text.end())
+    out.emplace_back(chunk_start, text.end());
+
+  return out;
+}
 }  // namespace magic_core
