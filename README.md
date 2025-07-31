@@ -2,12 +2,12 @@
 
 An intelligent file management system leveraging locally-run LLMs and embedding models to organize and classify your files with an unyielding commitment to privacy and performance.
 
-## 🎯 Project Status: MVP with Roadmap
+## Project Status: MVP with Roadmap
 
 **Current State**: Basic file indexing and semantic search working with single-file processing
 **Next Phase**: Advanced chunking system with worker pools for scalable processing
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 Magic Folder C++ is a C++ implementation that automatically processes files, generates embeddings using Ollama, and enables semantic search across your document collection. The system is designed with a layered architecture:
 
@@ -17,63 +17,63 @@ Magic Folder C++ is a C++ implementation that automatically processes files, gen
 - **`magic-api`**: REST API server with background worker pools
 - **`magic-cli`**: Command-line interface for system interaction
 
-### Current MVP Features ✅
+### Current MVP Features 
 
-- ✅ Basic file content extraction (text, markdown, code files)
-- ✅ Content hashing for change detection
-- ✅ Embedding generation via Ollama (`mxbai-embed-large`)
-- ✅ SQLite metadata storage with FAISS vector search
-- ✅ REST API endpoints for file processing and search
-- ✅ CLI interface for system interaction
-- ✅ Comprehensive test coverage
+- Basic file content extraction (text, markdown, code files)
+- Content hashing for change detection
+- Embedding generation via Ollama (`mxbai-embed-large`)
+- SQLite metadata storage with FAISS vector search
+- REST API endpoints for file processing and search
+- CLI interface for system interaction
+- Comprehensive test coverage
 
-### Next Phase Features 🚧
+### Next Phase Features 
 
-- 🚧 **Advanced Chunking System**: Multi-level content chunking with semantic boundaries
-- 🚧 **Worker Pool Architecture**: Asynchronous background processing
-- 🚧 **Task Queue System**: Reliable job processing with retry logic
-- 🚧 **Enhanced Search**: Two-stage search (file-level + chunk-level)
-- 🚧 **File Watching**: Real-time file system monitoring
+- **Advanced Chunking System**: Multi-level content chunking with semantic boundaries
+- **Worker Pool Architecture**: Asynchronous background processing
+- **Task Queue System**: Reliable job processing with retry logic
+- **Enhanced Search**: Two-stage search (file-level + chunk-level)
+- **File Watching**: Real-time file system monitoring
 
-## 📋 Development Roadmap
+## Development Roadmap
 
 ### Phase 1: Chunking System Overhaul (Priority 1)
 
 #### 1.1 Content Extractor Refactoring
-- [ ] **Create `Chunk.h` structure**
-  - [ ] Define `Chunk` struct with content, metadata, and vector fields
-  - [ ] Add chunk indexing and ordering logic
-  - [ ] Implement chunk-level content hashing
+- [x] **Create `Chunk.h` structure**
+  - [x] Define `Chunk` struct with content, metadata, and vector fields
+  - [x] Add chunk indexing and ordering logic
+  - [x] Implement chunk-level content hashing
 
-- [ ] **Implement `ContentExtractorFactory`**
-  - [ ] Create factory pattern for file type detection
-  - [ ] Add support for multiple extractor types
-  - [ ] Implement fallback to `PlainTextExtractor`
+- [x] **Implement `ContentExtractorFactory`**
+  - [x] Create factory pattern for file type detection
+  - [x] Add support for multiple extractor types
+  - [x] Implement fallback to `PlainTextExtractor`
 
-- [ ] **Build `MarkdownExtractor`**
-  - [ ] Parse markdown structure (headers, sections, lists)
-  - [ ] Create semantic chunk boundaries
-  - [ ] Preserve markdown formatting in chunks
-  - [ ] Add metadata extraction (title, headings, links)
+- [x] **Build `MarkdownExtractor`**
+  - [x] Parse markdown structure (headers, sections, lists)
+  - [x] Create semantic chunk boundaries
+  - [x] Preserve markdown formatting in chunks
+  - [x] Add metadata extraction (title, headings, links)
 
-- [ ] **Enhance `PlainTextExtractor`**
-  - [ ] Implement paragraph-based chunking
-  - [ ] Add sentence boundary detection
-  - [ ] Handle special characters and encoding
-  - [ ] Add content cleaning and normalization
+- [x] **Enhance `PlainTextExtractor`**
+  - [x] Implement paragraph-based chunking
+  - [x] Add sentence boundary detection
+  - [x] Handle special characters and encoding
+  - [x] Add content cleaning and normalization
 
 #### 1.2 Database Schema Updates
-- [ ] **Update `Files` table**
-  - [ ] Add `summary_vector_blob` for file-level embeddings
-  - [ ] Add `processing_status` field
-  - [ ] Add `suggested_category` and `suggested_filename` fields
-  - [ ] Add `tags` JSON field
+- [x] **Update `Files` table**
+  - [x] Add `summary_vector_blob` for file-level embeddings
+  - [x] Add `processing_status` field
+  - [x] Add `suggested_category` and `suggested_filename` fields
+  - [x] Add `tags` JSON field
 
-- [ ] **Create `Chunks` table**
-  - [ ] Implement chunk storage with file relationships
-  - [ ] Add chunk indexing and ordering
-  - [ ] Store chunk-level vectors
-  - [ ] Add content hashing for chunks
+- [x] **Create `Chunks` table**
+  - [x] Implement chunk storage with file relationships
+  - [x] Add chunk indexing and ordering
+  - [x] Store chunk-level vectors
+  - [x] Add content hashing for chunks
 
 - [ ] **Create `TaskQueue` table**
   - [ ] Implement task status tracking
@@ -244,7 +244,7 @@ TASK_QUEUE_POLL_INTERVAL=1000
 WATCHED_FOLDER=./watched_files
 ```
 
-## 🚀 Usage
+# Usage
 
 ### 1. Start the API Server
 
