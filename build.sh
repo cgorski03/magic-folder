@@ -25,9 +25,11 @@ fi
 EXTRA_CMAKE_ARGS=""
 # Check if the operating system is macOS (Darwin kernel)
 if [[ "$(uname -s)" == "Darwin" ]]; then
-    echo "macOS detected. Adding vcpkg arguments to allow unsupported builds (for Faiss)."
-    # This sets a CMake variable that is passed to the vcpkg toolchain script.
-    EXTRA_CMAKE_ARGS="-DVCPKG_INSTALL_OPTIONS=--allow-unsupported"
+    echo "macOS detected. Setting compiler to Homebrew LLVM to support OpenMP."
+    # Apple's default Clang doesn't include OpenMP, which is required by Faiss.
+    # We point CMake to the Homebrew-installed LLVM/Clang toolchain.
+    EXTRA_CMAKE_ARGS+=" -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang"
+    EXTRA_CMAKE_ARGS+=" -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++"
 fi
 
 

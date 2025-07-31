@@ -40,7 +40,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(LAPACK REQUIRED)
-find_package(faiss CONFIG REQUIRED)
+find_package(Faiss REQUIRED)
 
 # Add subdirectories
 add_subdirectory(src/magic_core)
