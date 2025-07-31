@@ -22,6 +22,9 @@ set(TEST_SOURCES
 # Create single test executable for all tests
 add_executable(magic_folder_tests ${TEST_SOURCES})
 
+# Find utf8cpp for tests
+find_package(utf8cpp CONFIG REQUIRED)
+
 # Link against required libraries
 target_link_libraries(magic_folder_tests 
     PRIVATE
@@ -29,6 +32,7 @@ target_link_libraries(magic_folder_tests
     GTest::gtest 
     GTest::gtest_main
     GTest::gmock
+    utf8cpp::utf8cpp
 )
 
 # Set include directories

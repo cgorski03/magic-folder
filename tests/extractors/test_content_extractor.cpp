@@ -9,6 +9,7 @@
 
 #include "magic_core/extractors/content_extractor.hpp"
 #include "test_utilities.hpp"
+#include <utf8.h>
 
 namespace magic_core {
 
@@ -292,6 +293,204 @@ TEST_F(ContentExtractorTest, ChunkingConstants_AreReasonable) {
   EXPECT_GT(MockContentExtractor::TEST_MAX_CHUNK_SIZE, 0);
   EXPECT_GT(MockContentExtractor::TEST_FIXED_CHUNK_SIZE, 0);
   
+}
+
+// ============================================================================
+// UTF-8 Boundary Splitting Tests
+// ============================================================================
+
+TEST_F(ContentExtractorTest, SplitIntoFixedChunks_UTF8Boundary_SimpleASCII) {
+  // Arrange - Simple ASCII text that should split normally
+  std::string ascii_text = "This is a simple ASCII text that should split normally at character boundaries.";
+  
+  // Act
+  auto chunks = mock_extractor_->split_into_fixed_chunks(ascii_text);
+  
+  // Assert
+  EXPECT_GT(chunks.size(), 0);
+  // Verify all chunks are valid UTF-8
+  for (const auto& chunk : chunks) {
+    EXPECT_TRUE(utf8::is_valid(chunk.begin(), chunk.end())) << "Chunk contains invalid UTF-8: " << chunk;
+  }
+}
+
+TEST_F(ContentExtractorTest, SplitIntoFixedChunks_UTF8Boundary_MultiByteCharacters) {
+  // Arrange - Text with multi-byte UTF-8 characters
+  std::string utf8_text = "Hello 世界! This text contains multi-byte characters like émojis 🚀 and ñoño.";
+  
+  // Act
+  auto chunks = mock_extractor_->split_into_fixed_chunks(utf8_text);
+  
+  // Assert
+  EXPECT_GT(chunks.size(), 0);
+  // Verify all chunks are valid UTF-8
+  for (const auto& chunk : chunks) {
+    EXPECT_TRUE(utf8::is_valid(chunk.begin(), chunk.end())) << "Chunk contains invalid UTF-8: " << chunk;
+  }
+  
+  // Verify that multi-byte characters are not split in the middle
+  for (const auto& chunk : chunks) {
+    std::string::const_iterator it = chunk.begin();
+    while (it != chunk.end()) {
+      EXPECT_NO_THROW(utf8::next(it, chunk.end())) << "Invalid UTF-8 sequence in chunk: " << chunk;
+    }
+  }
+}
+
+TEST_F(ContentExtractorTest, SplitIntoFixedChunks_UTF8Boundary_Emojis) {
+  // Arrange - Text with emojis (4-byte UTF-8 characters)
+  std::string emoji_text = "🚀🚁🚂🚃🚄🚅🚆🚇🚈🚉🚊🚋🚌🚍🚎🚏🚐🚑🚒🚓🚔🚕🚖🚗🚘🚙🚚🚛🚜🚝🚞🚟🚠🚡🚢🚣🚤🚥🚦🚧🚨🚩🚪🚫🚬🚭🚮🚯🚰🚱🚲🚳🚴🚵🚶🚷🚸🚹🚺🚻🚼🚽🚾🚿🛀🛁🛂🛃🛄🛅🛆🛇🛈🛉🛊🛋🛌🛍🛎🛏🛐🛑🛒🛓🛔🛕🛖🛗🛘🛙🛚🛛🛜🛝🛞🛟🛠🛡🛢🛣🛤🛥🛦🛧🛨🛩🛪🛫🛬🛭🛮🛯🛰🛱🛲🛳🛴🛵🛶🛷🛸🛹🛺🛻🛼🛽🛾🛿";
+  
+  // Act
+  auto chunks = mock_extractor_->split_into_fixed_chunks(emoji_text);
+  
+  // Assert
+  EXPECT_GT(chunks.size(), 0);
+  // Verify all chunks are valid UTF-8
+  for (const auto& chunk : chunks) {
+    EXPECT_TRUE(utf8::is_valid(chunk.begin(), chunk.end())) << "Chunk contains invalid UTF-8: " << chunk;
+  }
+  
+  // Verify that emojis are not split in the middle
+  for (const auto& chunk : chunks) {
+    std::string::const_iterator it = chunk.begin();
+    while (it != chunk.end()) {
+      EXPECT_NO_THROW(utf8::next(it, chunk.end())) << "Invalid UTF-8 sequence in chunk: " << chunk;
+    }
+  }
+}
+
+TEST_F(ContentExtractorTest, SplitIntoFixedChunks_UTF8Boundary_MixedContent) {
+  // Arrange - Mixed content with ASCII, multi-byte, and emojis
+  std::string mixed_text = "ASCII text 世界 with émojis 🚀 and ñoño characters. "
+                          "More text with 🎉🎊🎋🎌🎍🎎🎏🎐🎑🎒🎓🎔🎕🎖🎗🎘🎙🎚🎛🎜🎝🎞🎟🎠🎡🎢🎣🎤🎥🎦🎧🎨🎩🎪🎫🎬🎭🎮🎯🎰🎱🎲🎳🎴🎵🎶🎷🎸🎹🎺🎻🎼🎽🎾🎿";
+  
+  // Act
+  auto chunks = mock_extractor_->split_into_fixed_chunks(mixed_text);
+  
+  // Assert
+  EXPECT_GT(chunks.size(), 0);
+  // Verify all chunks are valid UTF-8
+  for (const auto& chunk : chunks) {
+    EXPECT_TRUE(utf8::is_valid(chunk.begin(), chunk.end())) << "Chunk contains invalid UTF-8: " << chunk;
+  }
+}
+
+TEST_F(ContentExtractorTest, SplitIntoFixedChunks_UTF8Boundary_EdgeCase_SingleMultiByte) {
+  // Arrange - Single multi-byte character at chunk boundary
+  std::string text_with_boundary_char = "Hello 世界! This text has a multi-byte character at the boundary.";
+  
+  // Act
+  auto chunks = mock_extractor_->split_into_fixed_chunks(text_with_boundary_char);
+  
+  // Assert
+  EXPECT_GT(chunks.size(), 0);
+  // Verify all chunks are valid UTF-8
+  for (const auto& chunk : chunks) {
+    EXPECT_TRUE(utf8::is_valid(chunk.begin(), chunk.end())) << "Chunk contains invalid UTF-8: " << chunk;
+  }
+}
+
+TEST_F(ContentExtractorTest, SplitIntoFixedChunks_UTF8Boundary_EdgeCase_EmojiAtBoundary) {
+  // Arrange - Emoji at chunk boundary
+  std::string text_with_emoji_boundary = "Hello 🚀! This text has an emoji at the boundary.";
+  
+  // Act
+  auto chunks = mock_extractor_->split_into_fixed_chunks(text_with_emoji_boundary);
+  
+  // Assert
+  EXPECT_GT(chunks.size(), 0);
+  // Verify all chunks are valid UTF-8
+  for (const auto& chunk : chunks) {
+    EXPECT_TRUE(utf8::is_valid(chunk.begin(), chunk.end())) << "Chunk contains invalid UTF-8: " << chunk;
+  }
+}
+
+TEST_F(ContentExtractorTest, SplitIntoFixedChunks_UTF8Boundary_ReconstructOriginal) {
+  // Arrange - Text that should be reconstructible
+  std::string original_text = "Hello 世界! This is a test with émojis 🚀 and ñoño characters. "
+                             "We want to make sure that when we split and reconstruct, we get the same text.";
+  
+  // Act
+  auto chunks = mock_extractor_->split_into_fixed_chunks(original_text);
+  
+  // Assert
+  EXPECT_GT(chunks.size(), 0);
+  
+  // Reconstruct the text from chunks
+  std::string reconstructed;
+  for (size_t i = 0; i < chunks.size(); ++i) {
+    if (i > 0) {
+      // Remove overlap from previous chunk
+      size_t overlap_size = MockContentExtractor::TEST_OVERLAP_SIZE;
+      if (reconstructed.length() >= overlap_size) {
+        reconstructed = reconstructed.substr(0, reconstructed.length() - overlap_size);
+      }
+    }
+    reconstructed += chunks[i];
+  }
+  
+  // Verify reconstruction matches original
+  EXPECT_EQ(reconstructed, original_text) << "Reconstructed text doesn't match original";
+}
+
+TEST_F(ContentExtractorTest, SplitIntoFixedChunks_UTF8Boundary_InvalidUTF8Handling) {
+  // Arrange - Text with invalid UTF-8 sequences
+  std::string invalid_utf8 = "Hello \xFF\xFE world!"; // Invalid UTF-8 sequence
+  
+  // Act & Assert
+  // The function should throw an exception for invalid UTF-8
+  EXPECT_THROW({
+    auto chunks = mock_extractor_->split_into_fixed_chunks(invalid_utf8);
+  }, utf8::invalid_utf8);
+}
+
+TEST_F(ContentExtractorTest, SplitIntoFixedChunks_UTF8Boundary_EmptyString) {
+  // Arrange
+  std::string empty_text = "";
+  
+  // Act
+  auto chunks = mock_extractor_->split_into_fixed_chunks(empty_text);
+  
+  // Assert
+  EXPECT_TRUE(chunks.empty());
+}
+
+TEST_F(ContentExtractorTest, SplitIntoFixedChunks_UTF8Boundary_SingleCharacter) {
+  // Arrange - Single UTF-8 character
+  std::string single_char = "🚀";
+  
+  // Act
+  auto chunks = mock_extractor_->split_into_fixed_chunks(single_char);
+  
+  // Assert
+  EXPECT_EQ(chunks.size(), 1);
+  EXPECT_EQ(chunks[0], single_char);
+  EXPECT_TRUE(utf8::is_valid(chunks[0].begin(), chunks[0].end()));
+}
+
+TEST_F(ContentExtractorTest, SplitIntoFixedChunks_UTF8Boundary_ChunkSizeVerification) {
+  // Arrange - Text that should create multiple chunks
+  std::string long_text;
+  for (int i = 0; i < 100; ++i) {
+    long_text += "Hello 世界! 🚀 ";
+  }
+  
+  // Act
+  auto chunks = mock_extractor_->split_into_fixed_chunks(long_text);
+  
+  // Assert
+  EXPECT_GT(chunks.size(), 1);
+  
+  // Verify chunk sizes are reasonable (not exceeding fixed chunk size)
+  for (size_t i = 0; i < chunks.size() - 1; ++i) {
+    EXPECT_LE(chunks[i].length(), MockContentExtractor::TEST_FIXED_CHUNK_SIZE);
+  }
+  
+  // Verify all chunks are valid UTF-8
+  for (const auto& chunk : chunks) {
+    EXPECT_TRUE(utf8::is_valid(chunk.begin(), chunk.end())) << "Chunk contains invalid UTF-8: " << chunk;
+  }
 }
 
 } // namespace magic_core
