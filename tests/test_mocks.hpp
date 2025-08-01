@@ -15,7 +15,16 @@ namespace magic_tests {
  */
 class MockOllamaClient : public magic_core::OllamaClient {
  public:
-  MockOllamaClient() : magic_core::OllamaClient("http://localhost:11434", "mxbai-embed-large") {}
+  MockOllamaClient() : magic_core::OllamaClient("http://localhost:11434", "mxbai-embed-large") {
+    // Set default behavior to return a valid embedding vector
+    std::vector<float> default_embedding(1024, 0.1f);
+    default_embedding[0] = 0.5f;
+    default_embedding[100] = 0.3f;
+    default_embedding[500] = 0.7f;
+    
+    ON_CALL(*this, get_embedding(testing::_))
+        .WillByDefault(testing::Return(default_embedding));
+  }
 
   MOCK_METHOD(std::vector<float>, get_embedding, (const std::string& text), (override));
 };
