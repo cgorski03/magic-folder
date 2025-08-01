@@ -1,6 +1,7 @@
 #include "magic_cli/cli_handler.hpp"
 #include <iostream>
 #include <sstream>
+#include <iomanip> // Required for std::fixed and std::setprecision
 
 namespace magic_cli {
 
@@ -50,6 +51,7 @@ CliOptions CliHandler::parse_arguments(int argc, char* argv[]) {
     options.top_k = 5;
     options.verbose = false;
     options.help = false;
+    options.magic_search = true;  // Default to magic search
     
     if (argc < 2) {
         options.command = Command::Help;
@@ -77,8 +79,31 @@ CliOptions CliHandler::parse_arguments(int argc, char* argv[]) {
         }
     } else if (command == "search" || command == "s") {
         options.command = Command::Search;
+        options.magic_search = true;  // Default magic search
         if (argc < 4) {
             throw CliError("Search command requires a query. Usage: search --query <query>");
+        }
+        for (int i = 2; i < argc; i += 2) {
+            if (i + 1 >= argc) break;
+            std::string flag = argv[i];
+            std::string value = argv[i + 1];
+            
+            if (flag == "--query" || flag == "-q") {
+                options.query = value;
+            } else if (flag == "--top-k" || flag == "-k") {
+                options.top_k = std::stoi(value);
+            } else if (flag == "--files-only" || flag == "-f") {
+                options.magic_search = false;
+            }
+        }
+        if (options.query.empty()) {
+            throw CliError("Search command requires a query. Usage: search --query <query>");
+        }
+    } else if (command == "filesearch" || command == "fs") {
+        options.command = Command::FileSearch;
+        options.magic_search = false;  // File-only search
+        if (argc < 4) {
+            throw CliError("File search command requires a query. Usage: filesearch --query <query>");
         }
         for (int i = 2; i < argc; i += 2) {
             if (i + 1 >= argc) break;
@@ -92,7 +117,7 @@ CliOptions CliHandler::parse_arguments(int argc, char* argv[]) {
             }
         }
         if (options.query.empty()) {
-            throw CliError("Search command requires a query. Usage: search --query <query>");
+            throw CliError("File search command requires a query. Usage: filesearch --query <query>");
         }
     } else if (command == "list" || command == "l") {
         options.command = Command::List;
@@ -112,6 +137,9 @@ void CliHandler::execute_command(const CliOptions& options) {
             break;
         case Command::Search:
             handle_search_command(options);
+            break;
+        case Command::FileSearch:
+            handle_file_search_command(options);
             break;
         case Command::List:
             handle_list_command(options);
@@ -144,7 +172,7 @@ void CliHandler::handle_process_command(const CliOptions& options) {
 }
 
 void CliHandler::handle_search_command(const CliOptions& options) {
-    std::cout << "Searching for: " << options.query << " (top_k: " << options.top_k << ")" << std::endl;
+    std::cout << "Magic search for: " << options.query << " (top_k: " << options.top_k << ")" << std::endl;
     
     nlohmann::json request_data = {
         {"query", options.query},
@@ -153,9 +181,25 @@ void CliHandler::handle_search_command(const CliOptions& options) {
     
     try {
         nlohmann::json response = make_post_request("/search", request_data);
-        print_json_response(response);
+        print_magic_search_response(response);
     } catch (const std::exception& e) {
         print_error("Failed to search: " + std::string(e.what()));
+    }
+}
+
+void CliHandler::handle_file_search_command(const CliOptions& options) {
+    std::cout << "File search for: " << options.query << " (top_k: " << options.top_k << ")" << std::endl;
+    
+    nlohmann::json request_data = {
+        {"query", options.query},
+        {"top_k", options.top_k}
+    };
+    
+    try {
+        nlohmann::json response = make_post_request("/files/search", request_data);
+        print_file_search_response(response);
+    } catch (const std::exception& e) {
+        print_error("Failed to search files: " + std::string(e.what()));
     }
 }
 
@@ -282,6 +326,50 @@ void CliHandler::print_json_response(const nlohmann::json& response) {
     std::cout << response.dump(2) << std::endl;
 }
 
+void CliHandler::print_magic_search_response(const nlohmann::json& response) {
+    std::cout << "\n=== Magic Search Results ===" << std::endl;
+    
+    // Print file results
+    if (response.contains("files") && response["files"].is_array()) {
+        std::cout << "\n📁 Files:" << std::endl;
+        for (const auto& file : response["files"]) {
+            std::cout << "  • " << file["path"].get<std::string>() 
+                      << " (score: " << std::fixed << std::setprecision(3) << file["score"].get<float>() << ")" << std::endl;
+        }
+    }
+    
+    // Print chunk results
+    if (response.contains("chunks") && response["chunks"].is_array()) {
+        std::cout << "\n📄 Chunks:" << std::endl;
+        for (const auto& chunk : response["chunks"]) {
+            std::cout << "  • File ID: " << chunk["file_id"].get<int>() 
+                      << " | Score: " << std::fixed << std::setprecision(3) << chunk["score"].get<float>() << std::endl;
+            std::cout << "    Content: " << chunk["content"].get<std::string>().substr(0, 100);
+            if (chunk["content"].get<std::string>().length() > 100) {
+                std::cout << "...";
+            }
+            std::cout << std::endl << std::endl;
+        }
+    }
+    
+    if (!response.contains("files") && !response.contains("chunks")) {
+        std::cout << "No results found." << std::endl;
+    }
+}
+
+void CliHandler::print_file_search_response(const nlohmann::json& response) {
+    std::cout << "\n=== File Search Results ===" << std::endl;
+    
+    if (response.is_array() && !response.empty()) {
+        for (const auto& file : response) {
+            std::cout << "  • " << file["path"].get<std::string>() 
+                      << " (score: " << std::fixed << std::setprecision(3) << file["score"].get<float>() << ")" << std::endl;
+        }
+    } else {
+        std::cout << "No files found." << std::endl;
+    }
+}
+
 void CliHandler::print_error(const std::string& error) {
     std::cerr << "Error: " << error << std::endl;
 }
@@ -296,7 +384,12 @@ Commands:
   process, p    Process a file for indexing
     --file, -f <path>    Path to the file to process
 
-  search, s     Search for files using semantic search
+  search, s     Magic search for files and chunks using semantic search
+    --query, -q <query>  Search query
+    --top-k, -k <num>    Number of results to return (default: 5)
+    --files-only, -f     Search files only (no chunks)
+
+  filesearch, fs  Search for files only using semantic search
     --query, -q <query>  Search query
     --top-k, -k <num>    Number of results to return (default: 5)
 
@@ -310,6 +403,8 @@ Environment Variables:
 Examples:
   magic_cli process --file /path/to/document.txt
   magic_cli search --query "machine learning algorithms" --top-k 10
+  magic_cli search --query "python code" --files-only
+  magic_cli filesearch --query "documentation" --top-k 5
   magic_cli list
 )" << std::endl;
 }

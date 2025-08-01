@@ -43,6 +43,7 @@ class Routes {
   crow::response handle_health_check(const crow::request &req);
   crow::response handle_process_file(const crow::request &req);
   crow::response handle_search(const crow::request &req);
+  crow::response handle_file_search(const crow::request &req);
   crow::response handle_list_files(const crow::request &req);
   crow::response handle_get_file_info(const crow::request &req, const std::string &path);
   crow::response handle_delete_file(const crow::request &req, const std::string &path);

@@ -14,6 +14,7 @@ namespace magic_cli
   {
     Process,
     Search,
+    FileSearch,
     List,
     Info,
     Delete,
@@ -29,6 +30,7 @@ namespace magic_cli
     std::string api_base_url;
     bool verbose;
     bool help;
+    bool magic_search;  // true for magic search (files + chunks), false for file-only search
   };
 
   class CliError : public std::exception
@@ -78,6 +80,7 @@ namespace magic_cli
     // Command handlers
     void handle_process_command(const CliOptions &options);
     void handle_search_command(const CliOptions &options);
+    void handle_file_search_command(const CliOptions &options);
     void handle_list_command(const CliOptions &options);
     void handle_info_command(const CliOptions &options);
     void handle_delete_command(const CliOptions &options);
@@ -92,6 +95,8 @@ namespace magic_cli
     void setup_curl_handle();
     static size_t write_callback(void *contents, size_t size, size_t nmemb, std::string *userp);
     void print_json_response(const nlohmann::json &response);
+    void print_magic_search_response(const nlohmann::json &response);
+    void print_file_search_response(const nlohmann::json &response);
     void print_error(const std::string &error);
     void print_help();
     std::string build_url(const std::string &endpoint);
