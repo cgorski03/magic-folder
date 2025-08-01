@@ -88,6 +88,42 @@ class SearchServiceTest : public magic_tests::MetadataStoreTestBase {
     metadata_store_->rebuild_faiss_index();
   }
 
+  // Set up test data with chunks
+  void setupTestDataWithChunks() {
+    // Create test files with chunks
+    std::vector<magic_core::FileMetadata> test_files;
+
+    // File 1: Machine learning related with chunks
+    auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/ml_algorithms.txt", "hash1", magic_core::FileType::Text, 1024, true);
+    file1.summary_vector_embedding = create_test_embedding_with_values({0.9f, 0.8f, 0.7f, 0.6f});
+    
+    // Create chunks for file 1
+    auto chunks1 = magic_tests::TestUtilities::create_test_chunks(3, "machine learning algorithm neural network");
+    
+    int file1_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file1, chunks1);
+
+    // File 2: Programming related with chunks
+    auto file2 = magic_tests::TestUtilities::create_test_file_metadata("/src/main.cpp", "hash2", magic_core::FileType::Code, 1024, true);
+    file2.summary_vector_embedding = create_test_embedding_with_values({0.1f, 0.2f, 0.3f, 0.4f});
+    
+    // Create chunks for file 2
+    auto chunks2 = magic_tests::TestUtilities::create_test_chunks(2, "C++ programming code function class");
+    
+    int file2_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file2, chunks2);
+
+    // File 3: Documentation related with chunks
+    auto file3 = magic_tests::TestUtilities::create_test_file_metadata("/docs/README.md", "hash3", magic_core::FileType::Markdown, 1024, true);
+    file3.summary_vector_embedding = create_test_embedding_with_values({0.5f, 0.5f, 0.5f, 0.5f});
+    
+    // Create chunks for file 3
+    auto chunks3 = magic_tests::TestUtilities::create_test_chunks(4, "documentation guide tutorial help");
+    
+    int file3_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file3, chunks3);
+
+    // Rebuild the Faiss index
+    metadata_store_->rebuild_faiss_index();
+  }
+
   // Helper method to set up mock expectations for query embedding
   void setupQueryEmbeddingExpectation(const std::string& query, const std::vector<float>& embedding) {
     EXPECT_CALL(*mock_ollama_client_, get_embedding(query))
@@ -346,6 +382,247 @@ TEST_F(SearchServiceTest, Search_MultipleQueries) {
     auto results = search_service_->search_files(query, 2);
     EXPECT_FALSE(results.empty());
   }
+}
+
+// ===== NEW TESTS FOR CHUNK SEARCH FUNCTIONALITY =====
+
+// Test the new search() method that returns both file and chunk results
+TEST_F(SearchServiceTest, Search_CombinedFileAndChunkResults) {
+  // Arrange - Set up data with chunks
+  setupTestDataWithChunks();
+  
+  std::string query = "machine learning algorithms";
+  auto query_embedding = create_test_embedding_with_values({0.9f, 0.8f, 0.7f, 0.6f});
+  setupQueryEmbeddingExpectation(query, query_embedding);
+
+  // Act
+  auto results = search_service_->search(query, 3);
+
+  // Assert
+  ASSERT_FALSE(results.file_results.empty());
+  // Chunk results may be empty if no chunks match, but the structure should be valid
+  EXPECT_LE(results.file_results.size(), 3);
+  EXPECT_LE(results.chunk_results.size(), 3);
+  
+  // Verify file results structure
+  for (const auto& file_result : results.file_results) {
+    EXPECT_GT(file_result.id, 0);
+    EXPECT_GE(file_result.distance, 0.0f);
+    EXPECT_FALSE(file_result.file.path.empty());
+  }
+  
+  // Verify chunk results structure (if any exist)
+  for (const auto& chunk_result : results.chunk_results) {
+    EXPECT_GT(chunk_result.id, 0);
+    EXPECT_GE(chunk_result.distance, 0.0f);
+    EXPECT_GT(chunk_result.file_id, 0);
+    EXPECT_GE(chunk_result.chunk_index, 0);
+    EXPECT_FALSE(chunk_result.content.empty());
+  }
+}
+
+// Test search() method with default k value
+TEST_F(SearchServiceTest, Search_CombinedDefaultKValue) {
+  // Arrange - Set up data with chunks
+  setupTestDataWithChunks();
+  
+  std::string query = "test query";
+  auto query_embedding = create_test_embedding();
+  setupQueryEmbeddingExpectation(query, query_embedding);
+
+  // Act
+  auto results = search_service_->search(query);
+
+  // Assert
+  ASSERT_FALSE(results.file_results.empty());
+  EXPECT_LE(results.file_results.size(), 10);  // Default k is 10
+  EXPECT_LE(results.chunk_results.size(), 10);
+}
+
+// Test search() method with custom k value
+TEST_F(SearchServiceTest, Search_CombinedCustomKValue) {
+  // Arrange - Set up data with chunks
+  setupTestDataWithChunks();
+  
+  std::string query = "test query";
+  auto query_embedding = create_test_embedding();
+  setupQueryEmbeddingExpectation(query, query_embedding);
+
+  // Act
+  auto results = search_service_->search(query, 1);
+
+  // Assert
+  ASSERT_FALSE(results.file_results.empty());
+  EXPECT_EQ(results.file_results.size(), 1);
+  EXPECT_LE(results.chunk_results.size(), 1);
+}
+
+// Test search() method with empty query
+TEST_F(SearchServiceTest, Search_CombinedEmptyQuery) {
+  // Arrange - Set up data with chunks
+  setupTestDataWithChunks();
+  
+  std::string query = "";
+  auto query_embedding = create_test_embedding();
+  setupQueryEmbeddingExpectation(query, query_embedding);
+
+  // Act
+  auto results = search_service_->search(query, 3);
+
+  // Assert
+  ASSERT_FALSE(results.file_results.empty());
+  EXPECT_LE(results.file_results.size(), 3);
+  EXPECT_LE(results.chunk_results.size(), 3);
+}
+
+// Test search() method error handling
+TEST_F(SearchServiceTest, Search_CombinedOllamaClientError) {
+  // Arrange
+  std::string query = "test query";
+  EXPECT_CALL(*mock_ollama_client_, get_embedding(query))
+      .WillOnce(testing::Throw(magic_core::OllamaError("Embedding failed")));
+
+  // Act & Assert
+  EXPECT_THROW(search_service_->search(query, 3), SearchServiceException);
+}
+
+// Test search() method with metadata store error
+TEST_F(SearchServiceTest, Search_CombinedMetadataStoreError) {
+  // Arrange
+  std::string query = "test query";
+  
+  // Simulate metadata store error by returning an empty vector
+  EXPECT_CALL(*mock_ollama_client_, get_embedding(query))
+      .WillOnce(testing::Return(std::vector<float>()));  // Empty vector
+
+  // Act & Assert
+  EXPECT_THROW(search_service_->search(query, 3), SearchServiceException);
+}
+
+// Test that chunk results are properly ordered by distance
+TEST_F(SearchServiceTest, Search_ChunkResultsOrderedByDistance) {
+  // Arrange - Set up data with chunks
+  setupTestDataWithChunks();
+  
+  std::string query = "machine learning";
+  auto query_embedding = create_test_embedding_with_values({0.9f, 0.8f, 0.7f, 0.6f});
+  setupQueryEmbeddingExpectation(query, query_embedding);
+
+  // Act
+  auto results = search_service_->search(query, 5);
+
+  // Assert
+  ASSERT_FALSE(results.file_results.empty());
+  
+  // File results should be ordered by distance (ascending)
+  for (size_t i = 1; i < results.file_results.size(); ++i) {
+    EXPECT_LE(results.file_results[i-1].distance, results.file_results[i].distance);
+  }
+  
+  // Chunk results should be ordered by distance (ascending) if any exist
+  for (size_t i = 1; i < results.chunk_results.size(); ++i) {
+    EXPECT_LE(results.chunk_results[i-1].distance, results.chunk_results[i].distance);
+  }
+}
+
+// Test that chunk results contain valid metadata
+TEST_F(SearchServiceTest, Search_ChunkResultsValidMetadata) {
+  // Arrange - Set up data with chunks
+  setupTestDataWithChunks();
+  
+  std::string query = "machine learning";
+  auto query_embedding = create_test_embedding_with_values({0.9f, 0.8f, 0.7f, 0.6f});
+  setupQueryEmbeddingExpectation(query, query_embedding);
+
+  // Act
+  auto results = search_service_->search(query, 5);
+
+  // Assert
+  ASSERT_FALSE(results.file_results.empty());
+  
+  // If we have chunk results, verify their metadata
+  for (const auto& chunk_result : results.chunk_results) {
+    EXPECT_GT(chunk_result.id, 0);
+    EXPECT_GT(chunk_result.file_id, 0);
+    EXPECT_GE(chunk_result.chunk_index, 0);
+    EXPECT_FALSE(chunk_result.content.empty());
+    EXPECT_GE(chunk_result.distance, 0.0f);
+  }
+}
+
+// Test that file IDs are correctly extracted from file results
+TEST_F(SearchServiceTest, Search_FileIdsExtraction) {
+  // Arrange
+  std::string query = "test query";
+  auto query_embedding = create_test_embedding();
+  setupQueryEmbeddingExpectation(query, query_embedding);
+
+  // Act
+  auto results = search_service_->search_files(query, 3);
+
+  // Assert
+  ASSERT_FALSE(results.empty());
+  
+  // Verify that all file IDs are positive
+  for (const auto& result : results) {
+    EXPECT_GT(result.id, 0);
+  }
+}
+
+// Test search with no matching files
+TEST_F(SearchServiceTest, Search_NoMatchingFiles) {
+  // Arrange
+  std::string query = "completely unrelated query";
+  auto query_embedding = create_test_embedding_with_values({0.0f, 0.0f, 0.0f, 0.0f});
+  setupQueryEmbeddingExpectation(query, query_embedding);
+
+  // Act
+  auto results = search_service_->search_files(query, 3);
+
+  // Assert
+  // Should still return some results, but they might not be very relevant
+  EXPECT_LE(results.size(), 3);
+}
+
+// Test search with no matching files for combined search
+TEST_F(SearchServiceTest, Search_CombinedNoMatchingFiles) {
+  // Arrange - Set up data with chunks
+  setupTestDataWithChunks();
+  
+  std::string query = "completely unrelated query";
+  auto query_embedding = create_test_embedding_with_values({0.0f, 0.0f, 0.0f, 0.0f});
+  setupQueryEmbeddingExpectation(query, query_embedding);
+
+  // Act
+  auto results = search_service_->search(query, 3);
+
+  // Assert
+  // Should still return some file results, but they might not be very relevant
+  EXPECT_LE(results.file_results.size(), 3);
+  EXPECT_LE(results.chunk_results.size(), 3);
+}
+
+// Test that the same query embedding is used for both file and chunk search
+TEST_F(SearchServiceTest, Search_ConsistentQueryEmbedding) {
+  // Arrange - Set up data with chunks
+  setupTestDataWithChunks();
+  
+  std::string query = "machine learning";
+  auto query_embedding = create_test_embedding_with_values({0.9f, 0.8f, 0.7f, 0.6f});
+  
+  // Expect the embedding to be called exactly once
+  EXPECT_CALL(*mock_ollama_client_, get_embedding(query))
+      .WillOnce(testing::Return(query_embedding));
+
+  // Act
+  auto results = search_service_->search(query, 3);
+
+  // Assert
+  ASSERT_FALSE(results.file_results.empty());
+  // The embedding should be used for both file and chunk search
+  // We can't directly verify this, but we can verify the results are consistent
+  EXPECT_LE(results.file_results.size(), 3);
+  EXPECT_LE(results.chunk_results.size(), 3);
 }
 
 }  // namespace magic_core
