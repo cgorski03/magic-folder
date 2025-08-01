@@ -627,13 +627,17 @@ void MetadataStore::rebuild_faiss_index() {
 
 std::vector<FileSearchResult> MetadataStore::search_similar_files(
     const std::vector<float> &query_vector, int k) {
+  if (!faiss_index_) {
+    return {};
+  }
+  
   int actual_k = std::min(k, (int)faiss_index_->ntotal);
   if (actual_k <= 0) {
     return {};
   }
   std::vector<float> distances(actual_k);
   std::vector<faiss::idx_t> labels(actual_k);
-  search_faiss_index(faiss_index_, query_vector, k, distances, labels);
+  search_faiss_index(faiss_index_, query_vector, actual_k, distances, labels);
 
   std::vector<FileSearchResult> results;
   for (int i = 0; i < actual_k; ++i) {
@@ -662,8 +666,13 @@ std::vector<FileSearchResult> MetadataStore::search_similar_files(
 
 std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
     const std::vector<int> &file_ids, const std::vector<float> &query_vector, int k) {
+  // Early return if no file IDs provided
+  if (file_ids.empty()) {
+    return {};
+  }
+  
   // get the chunks for the file_ids in sqlite
-  faiss::IndexIDMap *chunk_index = create_base_index();
+  auto chunk_index = std::unique_ptr<faiss::IndexIDMap>(create_base_index());
   std::vector<faiss::idx_t> faiss_ids;
   std::vector<float> all_vectors_flat;
   int current_num_vectors = 0;
@@ -678,7 +687,6 @@ std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
   }
   while (sqlite3_step(stmt) == SQLITE_ROW) {
     long id = sqlite3_column_int64(stmt, 0);
-    faiss_ids.push_back(id);
     const void *vector_blob = sqlite3_column_blob(stmt, 1);
     int blob_size = sqlite3_column_bytes(stmt, 1);
 
@@ -712,7 +720,7 @@ std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
   }
   std::vector<float> distances(actual_k);
   std::vector<faiss::idx_t> labels(actual_k);
-  search_faiss_index(chunk_index, query_vector, actual_k, distances, labels);
+  search_faiss_index(chunk_index.get(), query_vector, actual_k, distances, labels);
   // The labels are chunk ids, so we need to get the actual chunks from the database
   std::vector<int> chunk_ids;
   chunk_ids.reserve(labels.size());
@@ -720,6 +728,7 @@ std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
       chunk_ids.push_back(static_cast<int>(faiss_id));
   }
   std::vector<ChunkSearchResult> chunk_search_results = get_chunk_search_results(chunk_ids);
+  
   return chunk_search_results;
 }
 /* Wrapper for faiss search with error handling and dimension checking */
@@ -739,7 +748,7 @@ void MetadataStore::search_faiss_index(faiss::IndexIDMap *index,
                              std::to_string(query_vector.size()));
   }
 
-  faiss_index_->search(1, query_vector.data(), k, distances.data(), labels.data());
+  index->search(1, query_vector.data(), k, distances.data(), labels.data());
 }
 
 faiss::IndexIDMap *MetadataStore::create_base_index() {
