@@ -32,10 +32,12 @@ std::string ContentExtractor::compute_hash_from_content(const std::string& conte
     throw ContentExtractorError("Failed to initialize SHA256 digest");
   }
 
-  // Hash the entire content at once (no file I/O needed)
-  if (EVP_DigestUpdate(mdctx, content.data(), content.length()) != 1) {
-    EVP_MD_CTX_free(mdctx);
-    throw ContentExtractorError("Failed to update SHA256 digest");
+  // Hash the content - handle empty strings properly
+  if (!content.empty()) {
+    if (EVP_DigestUpdate(mdctx, content.data(), content.length()) != 1) {
+      EVP_MD_CTX_free(mdctx);
+      throw ContentExtractorError("Failed to update SHA256 digest");
+    }
   }
 
   unsigned char hash[EVP_MAX_MD_SIZE];

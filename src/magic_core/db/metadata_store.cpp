@@ -340,6 +340,11 @@ std::vector<ChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<int> fi
 }
 
 std::vector<ChunkSearchResult> MetadataStore::get_chunk_search_results(std::vector<int> chunk_ids) {
+  // Early return if no chunk IDs provided
+  if (chunk_ids.empty()) {
+    return {};
+  }
+  
   std::vector<ChunkSearchResult> results;
   std::string chunk_ids_str = int_vector_to_comma_string(chunk_ids);
   std::string sql = "SELECT id, file_id, content FROM chunks WHERE id IN (" + chunk_ids_str + ")";
@@ -573,11 +578,17 @@ void MetadataStore::delete_file_metadata(const std::string &path) {
 }
 
 void MetadataStore::rebuild_faiss_index() {
+  // Clean up existing index
   if (faiss_index_) {
     delete faiss_index_;
     faiss_index_ = nullptr;
   }
+  
+  // Create new index
   faiss_index_ = create_base_index();
+  if (!faiss_index_) {
+    throw MetadataStoreError("Failed to create base Faiss index");
+  }
 
   std::vector<faiss::idx_t> faiss_ids;
   std::vector<float> all_vectors_flat;
