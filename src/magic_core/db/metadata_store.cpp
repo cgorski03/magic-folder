@@ -318,7 +318,7 @@ std::vector<ChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<int> fi
 
   std::string file_ids_str = int_vector_to_comma_string(file_ids);
 
-  std::string sql = "SELECT file_id, chunk_index, content FROM chunks WHERE file_id IN (" +
+  std::string sql = "SELECT id, file_id, chunk_index, content FROM chunks WHERE file_id IN (" +
                     file_ids_str + ") ORDER BY file_id, chunk_index";
 
   sqlite3_stmt *stmt;
@@ -329,9 +329,10 @@ std::vector<ChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<int> fi
 
   while (sqlite3_step(stmt) == SQLITE_ROW) {
     ChunkMetadata chunk;
-    chunk.file_id = sqlite3_column_int(stmt, 0);
-    chunk.chunk_index = sqlite3_column_int(stmt, 1);
-    chunk.content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
+    chunk.id = sqlite3_column_int(stmt, 0);
+    chunk.file_id = sqlite3_column_int(stmt, 1);
+    chunk.chunk_index = sqlite3_column_int(stmt, 2);
+    chunk.content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
     chunks.push_back(chunk);
   }
 
