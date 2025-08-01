@@ -81,17 +81,17 @@ Magic Folder C++ is a C++ implementation that automatically processes files, gen
   - [ ] Support task retry logic
 
 #### 1.3 Search System Enhancement
-- [ ] **Two-Stage Search Implementation**
-  - [ ] Stage 1: File-level similarity search
-  - [ ] Stage 2: Chunk-level precision search
-  - [ ] Implement result ranking and scoring
-  - [ ] Add search result highlighting
+- [x] **Two-Stage Search Implementation**
+  - [x] Stage 1: File-level similarity search
+  - [x] Stage 2: Chunk-level precision search
+  - [x] Implement result ranking and scoring
+  - [x] Add search result highlighting
 
-- [ ] **Memory Index Management**
-  - [ ] Load summary vectors at startup
-  - [ ] Implement chunk index loading
-  - [ ] Add index rebuilding capabilities
-  - [ ] Optimize memory usage
+- [x] **Memory Index Management**
+  - [x] Load summary vectors at startup
+  - [x] Implement chunk index loading
+  - [x] Add index rebuilding capabilities
+  - [x] Optimize memory usage
 
 ### Phase 2: Worker Pool Architecture (Priority 2)
 
