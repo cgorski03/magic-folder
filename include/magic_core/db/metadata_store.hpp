@@ -56,6 +56,7 @@ struct FileSearchResult : public SearchResult {
 
 struct ChunkSearchResult : public SearchResult {
   int file_id;
+  int chunk_index;
   std::string content;
 };
 

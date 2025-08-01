@@ -102,6 +102,7 @@ crow::response Routes::handle_search(const crow::request &req) {
     nlohmann::json file_results = nlohmann::json::array();
     for (const magic_core::FileSearchResult &result : search_results.file_results) {
       nlohmann::json result_json;
+      result_json["id"] = result.file.id;
       result_json["path"] = result.file.path;
       result_json["score"] = result.distance;
       file_results.push_back(result_json);
@@ -114,6 +115,7 @@ crow::response Routes::handle_search(const crow::request &req) {
       nlohmann::json result_json;
       result_json["id"] = result.id;
       result_json["file_id"] = result.file_id;
+      result_json["chunk_index"] = result.chunk_index;
       result_json["content"] = result.content;
       result_json["score"] = result.distance;
       chunk_results.push_back(result_json);

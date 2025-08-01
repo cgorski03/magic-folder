@@ -351,7 +351,7 @@ void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult>& chunks) 
   }
 
   std::string chunk_ids_str = int_vector_to_comma_string(chunk_ids);
-  std::string sql = "SELECT id, file_id, content FROM chunks WHERE id IN (" + chunk_ids_str + ")";
+  std::string sql = "SELECT id, file_id, chunk_index, content FROM chunks WHERE id IN (" + chunk_ids_str + ")";
   sqlite3_stmt *stmt;
   int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
   if (rc != SQLITE_OK) {
@@ -359,12 +359,13 @@ void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult>& chunks) 
   }
 
   // Create a map to store metadata by ID
-  std::unordered_map<int, std::pair<int, std::string>> id_to_metadata;
+  std::unordered_map<int, std::tuple<int, int, std::string>> id_to_metadata;
   while (sqlite3_step(stmt) == SQLITE_ROW) {
     int id = sqlite3_column_int(stmt, 0);
     int file_id = sqlite3_column_int(stmt, 1);
-    std::string content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
-    id_to_metadata[id] = {file_id, content};
+    int chunk_index = sqlite3_column_int(stmt, 2);
+    std::string content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
+    id_to_metadata[id] = {file_id, chunk_index, content};
   }
   sqlite3_finalize(stmt);
 
@@ -372,8 +373,12 @@ void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult>& chunks) 
   for (auto& chunk : chunks) {
     auto it = id_to_metadata.find(chunk.id);
     if (it != id_to_metadata.end()) {
-      chunk.file_id = it->second.first;
-      chunk.content = it->second.second;
+      chunk.file_id = std::get<0>(it->second);
+      chunk.chunk_index = std::get<1>(it->second);
+      chunk.content = std::get<2>(it->second);
+    }
+    else {
+      std::cout << "Chunk with ID " << chunk.id << " not found" << std::endl;
     }
   }
 
