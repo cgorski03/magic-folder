@@ -339,13 +339,17 @@ std::vector<ChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<int> fi
   return chunks;
 }
 
-std::vector<ChunkSearchResult> MetadataStore::get_chunk_search_results(std::vector<int> chunk_ids) {
-  // Early return if no chunk IDs provided
-  if (chunk_ids.empty()) {
-    return {};
+void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult>& chunks) {
+  if (chunks.empty()) {
+    return;
   }
-  
-  std::vector<ChunkSearchResult> results;
+
+  std::vector<int> chunk_ids;
+  chunk_ids.reserve(chunks.size());
+  for (const auto& chunk : chunks) {
+    chunk_ids.push_back(chunk.id);
+  }
+
   std::string chunk_ids_str = int_vector_to_comma_string(chunk_ids);
   std::string sql = "SELECT id, file_id, content FROM chunks WHERE id IN (" + chunk_ids_str + ")";
   sqlite3_stmt *stmt;
@@ -353,15 +357,27 @@ std::vector<ChunkSearchResult> MetadataStore::get_chunk_search_results(std::vect
   if (rc != SQLITE_OK) {
     throw MetadataStoreError("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
   }
+
+  // Create a map to store metadata by ID
+  std::unordered_map<int, std::pair<int, std::string>> id_to_metadata;
   while (sqlite3_step(stmt) == SQLITE_ROW) {
-    ChunkSearchResult result;
-    result.id = sqlite3_column_int(stmt, 0);
-    result.file_id = sqlite3_column_int(stmt, 1);
-    result.content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
-    results.push_back(result);
+    int id = sqlite3_column_int(stmt, 0);
+    int file_id = sqlite3_column_int(stmt, 1);
+    std::string content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
+    id_to_metadata[id] = {file_id, content};
   }
   sqlite3_finalize(stmt);
-  return results;
+
+  // Fill in the metadata for each chunk (preserving distances)
+  for (auto& chunk : chunks) {
+    auto it = id_to_metadata.find(chunk.id);
+    if (it != id_to_metadata.end()) {
+      chunk.file_id = it->second.first;
+      chunk.content = it->second.second;
+    }
+  }
+
+  return;
 }
 
 std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &path) {
@@ -583,7 +599,7 @@ void MetadataStore::rebuild_faiss_index() {
     delete faiss_index_;
     faiss_index_ = nullptr;
   }
-  
+
   // Create new index
   faiss_index_ = create_base_index();
   if (!faiss_index_) {
@@ -641,7 +657,7 @@ std::vector<FileSearchResult> MetadataStore::search_similar_files(
   if (!faiss_index_) {
     return {};
   }
-  
+
   int actual_k = std::min(k, (int)faiss_index_->ntotal);
   if (actual_k <= 0) {
     return {};
@@ -681,14 +697,14 @@ std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
   if (file_ids.empty()) {
     return {};
   }
-  
+
   // get the chunks for the file_ids in sqlite
   auto chunk_index = std::unique_ptr<faiss::IndexIDMap>(create_base_index());
   std::vector<faiss::idx_t> faiss_ids;
   std::vector<float> all_vectors_flat;
   int current_num_vectors = 0;
   std::string file_ids_str = int_vector_to_comma_string(file_ids);
-  std::string sql = "SELECT id, summary_vector_blob FROM chunks WHERE file_id IN (" + file_ids_str +
+  std::string sql = "SELECT id, vector_blob FROM chunks WHERE file_id IN (" + file_ids_str +
                     ") ORDER BY file_id, chunk_index";
   sqlite3_stmt *stmt;
   int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
@@ -733,14 +749,19 @@ std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
   std::vector<faiss::idx_t> labels(actual_k);
   search_faiss_index(chunk_index.get(), query_vector, actual_k, distances, labels);
   // The labels are chunk ids, so we need to get the actual chunks from the database
-  std::vector<int> chunk_ids;
-  chunk_ids.reserve(labels.size());
-  for (const auto& faiss_id : labels) {
-      chunk_ids.push_back(static_cast<int>(faiss_id));
+  std::vector<ChunkSearchResult> chunks;
+  chunks.reserve(labels.size());
+  for (int i = 0; i < labels.size(); i++) {
+    const auto &faiss_id = labels[i];
+    ChunkSearchResult chunk;
+    chunk.id = static_cast<int>(faiss_id);
+    chunk.distance = distances[i];
+    chunks.push_back(chunk);
   }
-  std::vector<ChunkSearchResult> chunk_search_results = get_chunk_search_results(chunk_ids);
-  
-  return chunk_search_results;
+
+  // Fill in the metadata (file_id, content)
+  fill_chunk_metadata(chunks);
+  return chunks;
 }
 /* Wrapper for faiss search with error handling and dimension checking */
 void MetadataStore::search_faiss_index(faiss::IndexIDMap *index,

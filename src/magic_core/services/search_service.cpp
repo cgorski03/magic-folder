@@ -1,4 +1,5 @@
 #include "magic_core/services/search_service.hpp"
+#include <iostream>
 
 namespace magic_core {
 
@@ -36,6 +37,7 @@ SearchService::MagicSearchResult SearchService::search(const std::string &query,
     return {file_results, chunk_results};
   } catch (const std::exception &e) {
     // Re-throw as SearchServiceException to maintain the expected interface
+    std::cout << "Search failed: " << e.what() << std::endl;
     throw SearchServiceException("Search failed: " + std::string(e.what()));
   }
 }

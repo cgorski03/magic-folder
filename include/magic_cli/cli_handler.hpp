@@ -1,9 +1,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
-#include <memory>
-#include <functional>
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 

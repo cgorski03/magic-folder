@@ -133,7 +133,7 @@ class MetadataStore {
 
   std::vector<ChunkMetadata> get_chunk_metadata(std::vector<int> file_ids);
 
-  std::vector<ChunkSearchResult> get_chunk_search_results(std::vector<int> chunk_ids);
+  void fill_chunk_metadata(std::vector<ChunkSearchResult>& chunks);
 
   std::optional<FileMetadata> get_file_metadata(const std::string &path);
 

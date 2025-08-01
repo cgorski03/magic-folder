@@ -107,7 +107,7 @@ crow::response Routes::handle_search(const crow::request &req) {
       file_results.push_back(result_json);
     }
     response["files"] = file_results;
-    
+    std::cout << "File results: " << file_results.size() << std::endl;
     // Add chunk results
     nlohmann::json chunk_results = nlohmann::json::array();
     for (const magic_core::ChunkSearchResult &result : search_results.chunk_results) {
@@ -119,7 +119,7 @@ crow::response Routes::handle_search(const crow::request &req) {
       chunk_results.push_back(result_json);
     }
     response["chunks"] = chunk_results;
-
+    std::cout << "Chunk results: " << chunk_results.size() << std::endl;
     return create_json_response(response);
   } catch (const std::exception &e) {
     nlohmann::json error_response = create_error_response(e.what());
