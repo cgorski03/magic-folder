@@ -22,15 +22,20 @@ class SearchServiceException : public std::exception {
 
 class SearchService {
  public:
+  struct MagicSearchResult {
+    std::vector<FileSearchResult> file_results;
+    std::vector<ChunkSearchResult> chunk_results;
+  };
   SearchService(std::shared_ptr<MetadataStore> metadata_store,
                 std::shared_ptr<OllamaClient> ollama_client);
 
   // Natural-language semantic search. Returns top-k nearest neighbours.
-  std::vector<SearchResult> search(const std::string &query, int k = 10);
+  std::vector<FileSearchResult> search_files(const std::string &query, int k = 10);
+  MagicSearchResult search(const std::string &query, int k = 10);
 
  private:
   std::vector<float> embed_query(const std::string &query);
-
+  std::vector<int> get_file_ids(const std::vector<FileSearchResult> &file_results);
   std::shared_ptr<MetadataStore> metadata_store_;
   std::shared_ptr<OllamaClient> ollama_client_;
 };

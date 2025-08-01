@@ -106,7 +106,7 @@ TEST_F(SearchServiceTest, Search_SuccessfulSemanticSearch) {
   setupQueryEmbeddingExpectation(query, query_embedding);
 
   // Act
-  auto results = search_service_->search(query, 3);
+  auto results = search_service_->search_files(query, 3);
 
   // Assert
   ASSERT_FALSE(results.empty());
@@ -136,7 +136,7 @@ TEST_F(SearchServiceTest, Search_ProgrammingQuery) {
   setupQueryEmbeddingExpectation(query, query_embedding);
 
   // Act
-  auto results = search_service_->search(query, 2);
+  auto results = search_service_->search_files(query, 2);
 
   // Assert
   ASSERT_FALSE(results.empty());
@@ -160,7 +160,7 @@ TEST_F(SearchServiceTest, Search_DocumentationQuery) {
   setupQueryEmbeddingExpectation(query, query_embedding);
 
   // Act
-  auto results = search_service_->search(query, 2);
+  auto results = search_service_->search_files(query, 2);
 
   // Assert
   ASSERT_FALSE(results.empty());
@@ -184,7 +184,7 @@ TEST_F(SearchServiceTest, Search_DefaultKValue) {
   setupQueryEmbeddingExpectation(query, query_embedding);
 
   // Act
-  auto results = search_service_->search(query);
+  auto results = search_service_->search_files(query);
 
   // Assert
   ASSERT_FALSE(results.empty());
@@ -199,7 +199,7 @@ TEST_F(SearchServiceTest, Search_CustomKValue) {
   setupQueryEmbeddingExpectation(query, query_embedding);
 
   // Act
-  auto results = search_service_->search(query, 1);
+  auto results = search_service_->search_files(query, 1);
 
   // Assert
   ASSERT_FALSE(results.empty());
@@ -214,7 +214,7 @@ TEST_F(SearchServiceTest, Search_EmptyQuery) {
   setupQueryEmbeddingExpectation(query, query_embedding);
 
   // Act
-  auto results = search_service_->search(query, 3);
+  auto results = search_service_->search_files(query, 3);
 
   // Assert
   ASSERT_FALSE(results.empty());
@@ -229,7 +229,7 @@ TEST_F(SearchServiceTest, Search_LargeKValue) {
   setupQueryEmbeddingExpectation(query, query_embedding);
 
   // Act
-  auto results = search_service_->search(query, 100);
+  auto results = search_service_->search_files(query, 100);
 
   // Assert
   ASSERT_FALSE(results.empty());
@@ -244,7 +244,7 @@ TEST_F(SearchServiceTest, Search_ResultsOrderedByDistance) {
   setupQueryEmbeddingExpectation(query, query_embedding);
 
   // Act
-  auto results = search_service_->search(query, 4);
+  auto results = search_service_->search_files(query, 4);
 
   // Assert
   ASSERT_FALSE(results.empty());
@@ -263,7 +263,7 @@ TEST_F(SearchServiceTest, Search_ResultStructure) {
   setupQueryEmbeddingExpectation(query, query_embedding);
 
   // Act
-  auto results = search_service_->search(query, 1);
+  auto results = search_service_->search_files(query, 1);
 
   // Assert
   ASSERT_FALSE(results.empty());
@@ -283,7 +283,7 @@ TEST_F(SearchServiceTest, Search_OllamaClientError) {
       .WillOnce(testing::Throw(magic_core::OllamaError("Embedding failed")));
 
   // Act & Assert
-  EXPECT_THROW(search_service_->search(query, 3), SearchServiceException);
+  EXPECT_THROW(search_service_->search_files(query, 3), SearchServiceException);
 }
 
 // Test error handling when metadata store search fails
@@ -297,7 +297,7 @@ TEST_F(SearchServiceTest, Search_MetadataStoreError) {
       .WillOnce(testing::Return(std::vector<float>()));  // Empty vector
 
   // Act & Assert
-  EXPECT_THROW(search_service_->search(query, 3), SearchServiceException);
+  EXPECT_THROW(search_service_->search_files(query, 3), SearchServiceException);
 }
 
 // Test search with different embedding dimensions
@@ -308,7 +308,7 @@ TEST_F(SearchServiceTest, Search_DifferentEmbeddingDimensions) {
   setupQueryEmbeddingExpectation(query, query_embedding);
 
   // Act
-  auto results = search_service_->search(query, 3);
+  auto results = search_service_->search_files(query, 3);
 
   // Assert
   ASSERT_FALSE(results.empty());
@@ -322,7 +322,7 @@ TEST_F(SearchServiceTest, Search_EdgeCaseValues) {
   setupQueryEmbeddingExpectation(query, query_embedding);
 
   // Act
-  auto results = search_service_->search(query, 3);
+  auto results = search_service_->search_files(query, 3);
 
   // Assert
   ASSERT_FALSE(results.empty());
@@ -343,7 +343,7 @@ TEST_F(SearchServiceTest, Search_MultipleQueries) {
     auto query_embedding = create_test_embedding();
     setupQueryEmbeddingExpectation(query, query_embedding);
     
-    auto results = search_service_->search(query, 2);
+    auto results = search_service_->search_files(query, 2);
     EXPECT_FALSE(results.empty());
   }
 }

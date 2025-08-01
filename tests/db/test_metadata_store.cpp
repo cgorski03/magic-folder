@@ -63,10 +63,18 @@ TEST_F(MetadataStoreTest, CreateFileStub_DuplicatePathThrows) {
   auto metadata2 =
       magic_tests::TestUtilities::create_test_basic_file_metadata("/test/duplicate.txt", "hash2");
 
-  metadata_store_->upsert_file_stub(metadata1);
+  int file_id1 = metadata_store_->upsert_file_stub(metadata1);
 
-  // Act & Assert
-  EXPECT_THROW(metadata_store_->upsert_file_stub(metadata2), MetadataStoreError);
+  // Act - should update existing record, not throw
+  int file_id2 = metadata_store_->upsert_file_stub(metadata2);
+
+  // Assert - should return the same file ID since it's the same path
+  EXPECT_EQ(file_id1, file_id2);
+  
+  // Verify the second metadata was stored (updated)
+  auto retrieved = metadata_store_->get_file_metadata(file_id2);
+  ASSERT_TRUE(retrieved.has_value());
+  EXPECT_EQ(retrieved->file_hash, "hash2");
 }
 
 // Tests for update_file_ai_analysis
@@ -340,19 +348,25 @@ TEST_F(MetadataStoreTest, SearchSimilarFiles_EmptyIndexReturnsEmpty) {
   // Arrange - no files with vectors
   auto query_vector = magic_tests::TestUtilities::create_test_vector("test", 1024);
 
-  // Act & Assert
-  EXPECT_THROW(metadata_store_->search_similar_files(query_vector, 5), MetadataStoreError);
+  // Act
+  auto results = metadata_store_->search_similar_files(query_vector, 5);
+
+  // Assert - should return empty results, not throw
+  EXPECT_TRUE(results.empty());
 }
 
 TEST_F(MetadataStoreTest, SearchSimilarFiles_WrongVectorDimensionThrows) {
-  // Arrange
+  // Arrange - create a file with vectors so the index is not empty
   auto file = magic_tests::TestUtilities::create_test_file_metadata(
       "/test/search_wrong_dim.txt", "hash", FileType::Text, 1024, true);
   magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file);
+  
+  // Rebuild the index to include the file
+  metadata_store_->rebuild_faiss_index();
 
   std::vector<float> wrong_dim_query(512, 0.5f);  // Wrong dimension
 
-  // Act & Assert
+  // Act & Assert - should throw when calling search_faiss_index with wrong dimension
   EXPECT_THROW(metadata_store_->search_similar_files(wrong_dim_query, 5), MetadataStoreError);
 }
 

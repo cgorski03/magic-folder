@@ -50,6 +50,12 @@ magic_core::ProcessFileResult FileProcessingService::process_file(
     // This will be made more efficient with thread pool in future
     for (const auto& chunk : extraction_result.chunks) {
       std::vector<float> embedding = ollama_client_->get_embedding(chunk.content);
+      
+      // Handle empty embedding vectors
+      if (embedding.empty()) {
+        throw std::runtime_error("Received empty embedding vector for chunk: " + chunk.content);
+      }
+      
       chunks_with_embedding.push_back({chunk, embedding});
 
       // Accumulate for document-level embedding (running sum)
@@ -84,6 +90,7 @@ magic_core::ProcessFileResult FileProcessingService::process_file(
 
       // Store the document-level summary embedding (only if we had chunks)
       metadata_store_->update_file_ai_analysis(file_id, document_embedding, "", "", ProcessingStatus::IDLE);
+      metadata_store_->rebuild_faiss_index();
     }
     else {
       // For empty files, don't store any embedding

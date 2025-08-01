@@ -81,6 +81,14 @@ void MetadataStore::initialize() {
     throw MetadataStoreError("Failed to open database: " + std::string(sqlite3_errmsg(db_)));
   }
 
+  // Enable foreign key constraints
+  char *errmsg = nullptr;
+  if (sqlite3_exec(db_, "PRAGMA foreign_keys = ON;", nullptr, nullptr, &errmsg) != SQLITE_OK) {
+    std::string error = errmsg ? errmsg : "Unknown error";
+    sqlite3_free(errmsg);
+    throw MetadataStoreError("Failed to enable foreign keys: " + error);
+  }
+
   create_tables();
   // Always need to build the faiss index on startup
   rebuild_faiss_index();
@@ -138,9 +146,7 @@ std::chrono::system_clock::time_point MetadataStore::get_file_last_modified(
 
 /*
 This upserts a file stub. If the file already exists, it will update the file.
-If the file does not exist, it will insert a new file.
-
-This is used to create a file stub when a file is processed.
+This is used to create a file stub while the file is being processed.
 
 @returns the id of the file
 */
@@ -148,6 +154,23 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
   std::string last_modified_str = time_point_to_string(basic_metadata.last_modified);
   std::string created_at_str = time_point_to_string(basic_metadata.created_at);
 
+  // Check if file exists BEFORE doing the upsert
+  const char *select_sql = "SELECT id FROM files WHERE path = ?";
+  sqlite3_stmt *select_stmt;
+  int rc = sqlite3_prepare_v2(db_, select_sql, -1, &select_stmt, nullptr);
+  if (rc != SQLITE_OK) {
+    throw MetadataStoreError("Failed to prepare select statement: " +
+                             std::string(sqlite3_errmsg(db_)));
+  }
+
+  sqlite3_bind_text(select_stmt, 1, basic_metadata.path.c_str(), -1, SQLITE_STATIC);
+  int existing_id = -1;
+  if (sqlite3_step(select_stmt) == SQLITE_ROW) {
+    existing_id = sqlite3_column_int(select_stmt, 0);
+  }
+  sqlite3_finalize(select_stmt);
+
+  // Now do the upsert
   const char *sql =
       "INSERT INTO files (path, original_path, file_hash, processing_status, tags, "
       "last_modified, created_at, file_type, file_size) "
@@ -163,7 +186,7 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
       "file_size=excluded.file_size";
 
   sqlite3_stmt *stmt;
-  int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
+  rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
   if (rc != SQLITE_OK) {
     throw MetadataStoreError("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
   }
@@ -184,27 +207,16 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
     throw MetadataStoreError("Failed to execute statement: " + std::string(sqlite3_errmsg(db_)));
   }
 
-  // If we inserted, return the new rowid. If we updated, fetch the id by path.
-  int file_id = static_cast<int>(sqlite3_last_insert_rowid(db_));
-  if (file_id == 0) {
-    // Updated, need to fetch id
-    const char *select_sql = "SELECT id FROM files WHERE path = ?";
-    sqlite3_stmt *select_stmt;
-    int rc2 = sqlite3_prepare_v2(db_, select_sql, -1, &select_stmt, nullptr);
-    if (rc2 != SQLITE_OK) {
-      sqlite3_finalize(stmt);
-      throw MetadataStoreError("Failed to prepare select statement: " +
-                               std::string(sqlite3_errmsg(db_)));
-    }
-    sqlite3_bind_text(select_stmt, 1, basic_metadata.path.c_str(), -1, SQLITE_STATIC);
-    if (sqlite3_step(select_stmt) == SQLITE_ROW) {
-      file_id = sqlite3_column_int(select_stmt, 0);
-    }
-    sqlite3_finalize(select_stmt);
-  }
-
   sqlite3_finalize(stmt);
-  return file_id;
+
+  // Return the correct ID
+  if (existing_id != -1) {
+    // File existed, return existing ID
+    return existing_id;
+  } else {
+    // New file, return new ID
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));
+  }
 }
 
 void MetadataStore::update_file_ai_analysis(int file_id,
@@ -298,19 +310,13 @@ void MetadataStore::upsert_chunk_metadata(int file_id,
     throw MetadataStoreError(errmsg);
 }
 
-std::vector<SearchChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<int> file_ids) {
-  std::vector<SearchChunkMetadata> chunks;
+std::vector<ChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<int> file_ids) {
+  std::vector<ChunkMetadata> chunks;
 
   if (file_ids.empty())
     return chunks;
 
-  // Build comma-separated string for SQL IN clause
-  std::string file_ids_str;
-  for (size_t i = 0; i < file_ids.size(); ++i) {
-    if (i > 0)
-      file_ids_str += ",";
-    file_ids_str += std::to_string(file_ids[i]);
-  }
+  std::string file_ids_str = int_vector_to_comma_string(file_ids);
 
   std::string sql = "SELECT file_id, chunk_index, content FROM chunks WHERE file_id IN (" +
                     file_ids_str + ") ORDER BY file_id, chunk_index";
@@ -322,7 +328,7 @@ std::vector<SearchChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<i
   }
 
   while (sqlite3_step(stmt) == SQLITE_ROW) {
-    SearchChunkMetadata chunk;
+    ChunkMetadata chunk;
     chunk.file_id = sqlite3_column_int(stmt, 0);
     chunk.chunk_index = sqlite3_column_int(stmt, 1);
     chunk.content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
@@ -331,6 +337,52 @@ std::vector<SearchChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<i
 
   sqlite3_finalize(stmt);
   return chunks;
+}
+
+void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult>& chunks) {
+  if (chunks.empty()) {
+    return;
+  }
+
+  std::vector<int> chunk_ids;
+  chunk_ids.reserve(chunks.size());
+  for (const auto& chunk : chunks) {
+    chunk_ids.push_back(chunk.id);
+  }
+
+  std::string chunk_ids_str = int_vector_to_comma_string(chunk_ids);
+  std::string sql = "SELECT id, file_id, chunk_index, content FROM chunks WHERE id IN (" + chunk_ids_str + ")";
+  sqlite3_stmt *stmt;
+  int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+  if (rc != SQLITE_OK) {
+    throw MetadataStoreError("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
+  }
+
+  // Create a map to store metadata by ID
+  std::unordered_map<int, std::tuple<int, int, std::string>> id_to_metadata;
+  while (sqlite3_step(stmt) == SQLITE_ROW) {
+    int id = sqlite3_column_int(stmt, 0);
+    int file_id = sqlite3_column_int(stmt, 1);
+    int chunk_index = sqlite3_column_int(stmt, 2);
+    std::string content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
+    id_to_metadata[id] = {file_id, chunk_index, content};
+  }
+  sqlite3_finalize(stmt);
+
+  // Fill in the metadata for each chunk (preserving distances)
+  for (auto& chunk : chunks) {
+    auto it = id_to_metadata.find(chunk.id);
+    if (it != id_to_metadata.end()) {
+      chunk.file_id = std::get<0>(it->second);
+      chunk.chunk_index = std::get<1>(it->second);
+      chunk.content = std::get<2>(it->second);
+    }
+    else {
+      std::cout << "Chunk with ID " << chunk.id << " not found" << std::endl;
+    }
+  }
+
+  return;
 }
 
 std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &path) {
@@ -547,17 +599,17 @@ void MetadataStore::delete_file_metadata(const std::string &path) {
 }
 
 void MetadataStore::rebuild_faiss_index() {
+  // Clean up existing index
   if (faiss_index_) {
     delete faiss_index_;
     faiss_index_ = nullptr;
   }
 
-  // Create HNSW index wrapped with IDMap for custom ID support
-  auto base_index = new faiss::IndexHNSWFlat(VECTOR_DIMENSION, HNSW_M_PARAM);
-  base_index->hnsw.efConstruction = HNSW_EF_CONSTRUCTION_PARAM;
-
-  // Wrap with IDMap to enable add_with_ids
-  faiss_index_ = new faiss::IndexIDMap(base_index);
+  // Create new index
+  faiss_index_ = create_base_index();
+  if (!faiss_index_) {
+    throw MetadataStoreError("Failed to create base Faiss index");
+  }
 
   std::vector<faiss::idx_t> faiss_ids;
   std::vector<float> all_vectors_flat;
@@ -605,34 +657,21 @@ void MetadataStore::rebuild_faiss_index() {
   }
 }
 
-std::vector<SearchResult> MetadataStore::search_similar_files(
+std::vector<FileSearchResult> MetadataStore::search_similar_files(
     const std::vector<float> &query_vector, int k) {
-  if (!faiss_index_ || faiss_index_->ntotal == 0) {
-    // If the index is empty or not built, we can't search.
-    throw MetadataStoreError("Faiss index not initialized or empty. Cannot perform search.");
+  if (!faiss_index_) {
+    return {};
   }
 
-  if (query_vector.size() != VECTOR_DIMENSION) {
-    throw MetadataStoreError("Query vector dimension mismatch - HUH?. Expected " +
-                             std::to_string(VECTOR_DIMENSION) + ", got " +
-                             std::to_string(query_vector.size()));
-  }
-
-  // Ensure k is not greater than the number of vectors in the index
-  // Need to decide whether this actually matters for us
   int actual_k = std::min(k, (int)faiss_index_->ntotal);
   if (actual_k <= 0) {
-    return {};  // No results if k is non-positive or index is empty
+    return {};
   }
-
   std::vector<float> distances(actual_k);
-  std::vector<faiss::idx_t> labels(actual_k);  // IDs returned by Faiss
+  std::vector<faiss::idx_t> labels(actual_k);
+  search_faiss_index(faiss_index_, query_vector, actual_k, distances, labels);
 
-  // Perform the search
-  // The first argument '1' means we are searching with one query vector
-  faiss_index_->search(1, query_vector.data(), actual_k, distances.data(), labels.data());
-
-  std::vector<SearchResult> results;
+  std::vector<FileSearchResult> results;
   for (int i = 0; i < actual_k; ++i) {
     long faiss_id = labels[i];
     // Faiss returns -1 for padded results if it finds fewer than 'k' neighbors
@@ -655,5 +694,114 @@ std::vector<SearchResult> MetadataStore::search_similar_files(
   }
 
   return results;
+}
+
+std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
+    const std::vector<int> &file_ids, const std::vector<float> &query_vector, int k) {
+  // Early return if no file IDs provided
+  if (file_ids.empty()) {
+    return {};
+  }
+
+  // get the chunks for the file_ids in sqlite
+  auto chunk_index = std::unique_ptr<faiss::IndexIDMap>(create_base_index());
+  std::vector<faiss::idx_t> faiss_ids;
+  std::vector<float> all_vectors_flat;
+  int current_num_vectors = 0;
+  std::string file_ids_str = int_vector_to_comma_string(file_ids);
+  std::string sql = "SELECT id, vector_blob FROM chunks WHERE file_id IN (" + file_ids_str +
+                    ") ORDER BY file_id, chunk_index";
+  sqlite3_stmt *stmt;
+  int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+  if (rc != SQLITE_OK) {
+    throw MetadataStoreError("Failed to prepare statement for index rebuild: " +
+                             std::string(sqlite3_errmsg(db_)));
+  }
+  while (sqlite3_step(stmt) == SQLITE_ROW) {
+    long id = sqlite3_column_int64(stmt, 0);
+    const void *vector_blob = sqlite3_column_blob(stmt, 1);
+    int blob_size = sqlite3_column_bytes(stmt, 1);
+
+    // Validate vector size to match expected dimension
+    if (vector_blob && blob_size == VECTOR_DIMENSION * sizeof(float)) {
+      faiss_ids.push_back(id);
+      const float *vec_ptr = reinterpret_cast<const float *>(vector_blob);
+      // Append vector data to a flat vector
+      all_vectors_flat.insert(all_vectors_flat.end(), vec_ptr, vec_ptr + VECTOR_DIMENSION);
+      current_num_vectors++;
+    } else if (vector_blob && blob_size > 0) {
+      // Log a warning for mismatched dimensions, but continue processing others
+      std::cerr << "Warning: Skipping file ID " << id
+                << " during index rebuild due to mismatched vector dimension. Expected "
+                << VECTOR_DIMENSION * sizeof(float) << " bytes, got " << blob_size << " bytes."
+                << std::endl;
+    }
+  }
+  sqlite3_finalize(stmt);
+  // build a faiss index of the chunks by batch adding at the end
+  if (current_num_vectors > 0) {
+    chunk_index->add_with_ids(current_num_vectors, all_vectors_flat.data(), faiss_ids.data());
+    std::cout << "Chunk index built with " << current_num_vectors << " vectors." << std::endl;
+  } else {
+    std::cout << "Chunk index built, no vectors found to add." << std::endl;
+  }
+  // search the faiss index for the query vector
+  int actual_k = std::min(k, (int)chunk_index->ntotal);
+  if (actual_k <= 0) {
+    return {};
+  }
+  std::vector<float> distances(actual_k);
+  std::vector<faiss::idx_t> labels(actual_k);
+  search_faiss_index(chunk_index.get(), query_vector, actual_k, distances, labels);
+  // The labels are chunk ids, so we need to get the actual chunks from the database
+  std::vector<ChunkSearchResult> chunks;
+  chunks.reserve(labels.size());
+  for (int i = 0; i < labels.size(); i++) {
+    const auto &faiss_id = labels[i];
+    ChunkSearchResult chunk;
+    chunk.id = static_cast<int>(faiss_id);
+    chunk.distance = distances[i];
+    chunks.push_back(chunk);
+  }
+
+  // Fill in the metadata (file_id, content)
+  fill_chunk_metadata(chunks);
+  return chunks;
+}
+/* Wrapper for faiss search with error handling and dimension checking */
+void MetadataStore::search_faiss_index(faiss::IndexIDMap *index,
+                                       const std::vector<float> &query_vector,
+                                       int k,
+                                       std::vector<float> &distances,
+                                       std::vector<faiss::idx_t> &labels) {
+  if (!index || index->ntotal == 0) {
+    // If the index is empty or not built, we can't search.
+    throw MetadataStoreError("Faiss index not initialized or empty. Cannot perform search.");
+  }
+
+  if (query_vector.size() != VECTOR_DIMENSION) {
+    throw MetadataStoreError("Query vector dimension mismatch - HUH?. Expected " +
+                             std::to_string(VECTOR_DIMENSION) + ", got " +
+                             std::to_string(query_vector.size()));
+  }
+
+  index->search(1, query_vector.data(), k, distances.data(), labels.data());
+}
+
+faiss::IndexIDMap *MetadataStore::create_base_index() {
+  auto base_index = new faiss::IndexHNSWFlat(VECTOR_DIMENSION, HNSW_M_PARAM);
+  base_index->hnsw.efConstruction = HNSW_EF_CONSTRUCTION_PARAM;
+  // Wrap with IDMap to enable add_with_ids
+  return new faiss::IndexIDMap(base_index);
+}
+
+std::string MetadataStore::int_vector_to_comma_string(const std::vector<int> &vector) {
+  std::stringstream ss;
+  for (size_t i = 0; i < vector.size(); ++i) {
+    ss << vector[i];
+    if (i < vector.size() - 1)
+      ss << ",";
+  }
+  return ss.str();
 }
 }  // namespace magic_core

@@ -35,6 +35,11 @@ void Routes::register_routes(Server &server) {
     return handle_search(req);
   });
 
+  // File search endpoint
+  CROW_ROUTE(app, "/files/search").methods(crow::HTTPMethod::POST)([this](const crow::request &req) {
+    return handle_file_search(req);
+  });
+
   // List files endpoint
   CROW_ROUTE(app, "/files")
   ([this](const crow::request &req) { return handle_list_files(req); });
@@ -86,12 +91,56 @@ crow::response Routes::handle_search(const crow::request &req) {
     std::string query = extract_search_query_from_request(req);
     int top_k = extract_top_k_from_request(req);
 
-    std::cout << "Searching for: " << query << " with top_k: " << top_k << std::endl;
+    std::cout << "Magic search for: " << query << " with top_k: " << top_k << std::endl;
 
-    // Placeholder search results
+    // Use the magic search that returns both files and chunks
+    magic_core::SearchService::MagicSearchResult search_results = search_service_->search(query, top_k);
+    
+    nlohmann::json response;
+    
+    // Add file results
+    nlohmann::json file_results = nlohmann::json::array();
+    for (const magic_core::FileSearchResult &result : search_results.file_results) {
+      nlohmann::json result_json;
+      result_json["id"] = result.file.id;
+      result_json["path"] = result.file.path;
+      result_json["score"] = result.distance;
+      file_results.push_back(result_json);
+    }
+    response["files"] = file_results;
+    std::cout << "File results: " << file_results.size() << std::endl;
+    // Add chunk results
+    nlohmann::json chunk_results = nlohmann::json::array();
+    for (const magic_core::ChunkSearchResult &result : search_results.chunk_results) {
+      nlohmann::json result_json;
+      result_json["id"] = result.id;
+      result_json["file_id"] = result.file_id;
+      result_json["chunk_index"] = result.chunk_index;
+      result_json["content"] = result.content;
+      result_json["score"] = result.distance;
+      chunk_results.push_back(result_json);
+    }
+    response["chunks"] = chunk_results;
+    std::cout << "Chunk results: " << chunk_results.size() << std::endl;
+    return create_json_response(response);
+  } catch (const std::exception &e) {
+    nlohmann::json error_response = create_error_response(e.what());
+    return create_json_response(error_response, 400);
+  }
+}
+
+crow::response Routes::handle_file_search(const crow::request &req) {
+  try {
+    std::string query = extract_search_query_from_request(req);
+    int top_k = extract_top_k_from_request(req);
+
+    std::cout << "File search for: " << query << " with top_k: " << top_k << std::endl;
+
+    // Use the file-only search
+    std::vector<magic_core::FileSearchResult> search_results = search_service_->search_files(query, top_k);
+    
     nlohmann::json results = nlohmann::json::array();
-    std::vector<magic_core::SearchResult> search_results = search_service_->search(query, top_k);
-    for (const magic_core::SearchResult &result : search_results) {
+    for (const magic_core::FileSearchResult &result : search_results) {
       nlohmann::json result_json;
       result_json["path"] = result.file.path;
       result_json["score"] = result.distance;

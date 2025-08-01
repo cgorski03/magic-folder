@@ -38,19 +38,26 @@ struct FileMetadata : public BasicFileMetadata {
   std::string suggested_filename;
 };
 
-
-struct SearchChunkMetadata  {
+struct ChunkMetadata {
   int id;
   std::vector<float> vector_embedding;
   int file_id;
   int chunk_index;
   std::string content;
 };
-
 struct SearchResult {
   int id;
   float distance;
+};
+
+struct FileSearchResult : public SearchResult {
   FileMetadata file;
+};
+
+struct ChunkSearchResult : public SearchResult {
+  int file_id;
+  int chunk_index;
+  std::string content;
 };
 
 struct ChunkWithEmbedding {
@@ -58,24 +65,27 @@ struct ChunkWithEmbedding {
   std::vector<float> embedding;
 };
 
-enum class ProcessingStatus {
-  IDLE,
-  PROCESSING,
-  FAILED
-};
+enum class ProcessingStatus { IDLE, PROCESSING, FAILED };
 inline std::string to_string(ProcessingStatus status) {
   switch (status) {
-      case ProcessingStatus::IDLE: return "IDLE";
-      case ProcessingStatus::PROCESSING: return "PROCESSING";
-      case ProcessingStatus::FAILED: return "FAILED";
-      default: return "UNKNOWN";
+    case ProcessingStatus::IDLE:
+      return "IDLE";
+    case ProcessingStatus::PROCESSING:
+      return "PROCESSING";
+    case ProcessingStatus::FAILED:
+      return "FAILED";
+    default:
+      return "UNKNOWN";
   }
 }
 
-inline ProcessingStatus processing_status_from_string(const std::string& str) {
-  if (str == "IDLE") return ProcessingStatus::IDLE;
-  if (str == "PROCESSING") return ProcessingStatus::PROCESSING;
-  if (str == "FAILED") return ProcessingStatus::FAILED;
+inline ProcessingStatus processing_status_from_string(const std::string &str) {
+  if (str == "IDLE")
+    return ProcessingStatus::IDLE;
+  if (str == "PROCESSING")
+    return ProcessingStatus::PROCESSING;
+  if (str == "FAILED")
+    return ProcessingStatus::FAILED;
   throw std::invalid_argument("Unknown ProcessingStatus: " + str);
 }
 
@@ -122,7 +132,9 @@ class MetadataStore {
 
   void upsert_chunk_metadata(int file_id, const std::vector<ChunkWithEmbedding> &chunks);
 
-  std::vector<SearchChunkMetadata> get_chunk_metadata(std::vector<int> file_ids);
+  std::vector<ChunkMetadata> get_chunk_metadata(std::vector<int> file_ids);
+
+  void fill_chunk_metadata(std::vector<ChunkSearchResult>& chunks);
 
   std::optional<FileMetadata> get_file_metadata(const std::string &path);
 
@@ -137,7 +149,10 @@ class MetadataStore {
   // Check if file exists
   bool file_exists(const std::string &path);
 
-  std::vector<SearchResult> search_similar_files(const std::vector<float> &query_vector, int k);
+  std::vector<FileSearchResult> search_similar_files(const std::vector<float> &query_vector, int k);
+  std::vector<ChunkSearchResult> search_similar_chunks(const std::vector<int> &file_ids,
+                                                       const std::vector<float> &query_vector,
+                                                       int k);
 
   void rebuild_faiss_index();
 
@@ -146,14 +161,17 @@ class MetadataStore {
   sqlite3 *db_;
 
   // In-memory Faiss index
-  faiss::Index *faiss_index_;
+  faiss::IndexIDMap *faiss_index_;
 
   // Faiss Index Parameters - since we will support multiple embedding models, these will have to be
   // able to change
   const int HNSW_M_PARAM = 32;
   const int HNSW_EF_CONSTRUCTION_PARAM = 100;
-
   // Helper methods
+  
+  faiss::IndexIDMap *create_base_index();
+  void search_faiss_index(faiss::IndexIDMap *index, const std::vector<float> &query_vector, int k, std::vector<float> &results, std::vector<faiss::idx_t> &labels);
+
   void create_tables();
   void execute_sql(const std::string &sql);
   std::chrono::system_clock::time_point get_file_last_modified(
@@ -161,5 +179,6 @@ class MetadataStore {
   // Time point conversions
   std::string time_point_to_string(const std::chrono::system_clock::time_point &tp);
   std::chrono::system_clock::time_point string_to_time_point(const std::string &time_str);
+  std::string int_vector_to_comma_string(const std::vector<int> &vector);
 };
 }  // namespace magic_core
