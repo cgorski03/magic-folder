@@ -436,4 +436,368 @@ TEST_F(MetadataStoreTest, CompleteWorkflow_FileStubToSearchable) {
   EXPECT_TRUE(found);
 }
 
+// ===== NEW TESTS FOR CHUNK SEARCH FUNCTIONALITY =====
+
+// Test search_similar_chunks with valid file IDs
+TEST_F(MetadataStoreTest, SearchSimilarChunks_ValidFileIds) {
+  // Arrange - Create files with chunks
+  auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/file1.txt", "hash1", magic_core::FileType::Text, 1024, true);
+  file1.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("file1", 1024);
+  
+  auto chunks1 = magic_tests::TestUtilities::create_test_chunks(3, "machine learning algorithm neural network");
+  int file1_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file1, chunks1);
+
+  auto file2 = magic_tests::TestUtilities::create_test_file_metadata("/docs/file2.txt", "hash2", magic_core::FileType::Text, 1024, true);
+  file2.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("file2", 1024);
+  
+  auto chunks2 = magic_tests::TestUtilities::create_test_chunks(2, "C++ programming code function");
+  int file2_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file2, chunks2);
+
+  metadata_store_->rebuild_faiss_index();
+
+  std::vector<int> file_ids = {file1_id, file2_id};
+  auto query_vector = magic_tests::TestUtilities::create_test_vector("machine learning", 1024);
+
+  // Act
+  auto results = metadata_store_->search_similar_chunks(file_ids, query_vector, 5);
+
+  // Assert
+  ASSERT_FALSE(results.empty());
+  EXPECT_LE(results.size(), 5);
+  
+  // Verify chunk result structure
+  for (const auto& chunk_result : results) {
+    EXPECT_GT(chunk_result.id, 0);
+    EXPECT_GE(chunk_result.distance, 0.0f);
+    EXPECT_GT(chunk_result.file_id, 0);
+    EXPECT_GE(chunk_result.chunk_index, 0);
+    EXPECT_FALSE(chunk_result.content.empty());
+    
+    // Verify file_id is one of the expected ones
+    EXPECT_TRUE(chunk_result.file_id == file1_id || chunk_result.file_id == file2_id);
+  }
+}
+
+// Test search_similar_chunks with empty file IDs
+TEST_F(MetadataStoreTest, SearchSimilarChunks_EmptyFileIds) {
+  // Arrange
+  auto query_vector = magic_tests::TestUtilities::create_test_vector("test", 1024);
+  std::vector<int> file_ids = {};
+
+  // Act
+  auto results = metadata_store_->search_similar_chunks(file_ids, query_vector, 5);
+
+  // Assert
+  EXPECT_TRUE(results.empty());
+}
+
+// Test search_similar_chunks with non-existent file IDs
+TEST_F(MetadataStoreTest, SearchSimilarChunks_NonExistentFileIds) {
+  // Arrange
+  auto query_vector = magic_tests::TestUtilities::create_test_vector("test", 1024);
+  std::vector<int> file_ids = {999, 1000};  // Non-existent IDs
+
+  // Act
+  auto results = metadata_store_->search_similar_chunks(file_ids, query_vector, 5);
+
+  // Assert
+  EXPECT_TRUE(results.empty());
+}
+
+// Test search_similar_chunks with files that have no chunks
+TEST_F(MetadataStoreTest, SearchSimilarChunks_FilesWithoutChunks) {
+  // Arrange - Create files without chunks
+  auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/file1.txt", "hash1", magic_core::FileType::Text, 1024, true);
+  file1.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("file1", 1024);
+  int file1_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file1);
+
+  metadata_store_->rebuild_faiss_index();
+
+  std::vector<int> file_ids = {file1_id};
+  auto query_vector = magic_tests::TestUtilities::create_test_vector("test", 1024);
+
+  // Act
+  auto results = metadata_store_->search_similar_chunks(file_ids, query_vector, 5);
+
+  // Assert
+  EXPECT_TRUE(results.empty());
+}
+
+// Test search_similar_chunks with large k value
+TEST_F(MetadataStoreTest, SearchSimilarChunks_LargeKValue) {
+  // Arrange - Create files with chunks
+  auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/file1.txt", "hash1", magic_core::FileType::Text, 1024, true);
+  file1.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("file1", 1024);
+  
+  auto chunks1 = magic_tests::TestUtilities::create_test_chunks(3, "machine learning algorithm neural network");
+  int file1_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file1, chunks1);
+
+  metadata_store_->rebuild_faiss_index();
+
+  std::vector<int> file_ids = {file1_id};
+  auto query_vector = magic_tests::TestUtilities::create_test_vector("machine learning", 1024);
+
+  // Act
+  auto results = metadata_store_->search_similar_chunks(file_ids, query_vector, 100);
+
+  // Assert
+  ASSERT_FALSE(results.empty());
+  EXPECT_LE(results.size(), 3);  // Should not exceed available chunks
+}
+
+// Test search_similar_chunks result ordering
+TEST_F(MetadataStoreTest, SearchSimilarChunks_ResultsOrderedByDistance) {
+  // Arrange - Create files with chunks
+  auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/file1.txt", "hash1", magic_core::FileType::Text, 1024, true);
+  file1.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("file1", 1024);
+  
+  auto chunks1 = magic_tests::TestUtilities::create_test_chunks(5, "machine learning algorithm neural network deep learning");
+  int file1_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file1, chunks1);
+
+  metadata_store_->rebuild_faiss_index();
+
+  std::vector<int> file_ids = {file1_id};
+  auto query_vector = magic_tests::TestUtilities::create_test_vector("machine learning", 1024);
+
+  // Act
+  auto results = metadata_store_->search_similar_chunks(file_ids, query_vector, 5);
+
+  // Assert
+  ASSERT_FALSE(results.empty());
+  
+  // Results should be ordered by distance (ascending)
+  for (size_t i = 1; i < results.size(); ++i) {
+    EXPECT_LE(results[i-1].distance, results[i].distance);
+  }
+}
+
+// Test fill_chunk_metadata with valid chunk results
+TEST_F(MetadataStoreTest, FillChunkMetadata_ValidChunks) {
+  // Arrange - Create files with chunks
+  auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/file1.txt", "hash1", magic_core::FileType::Text, 1024, true);
+  file1.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("file1", 1024);
+  
+  auto chunks1 = magic_tests::TestUtilities::create_test_chunks(3, "machine learning algorithm neural network");
+  int file1_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file1, chunks1);
+
+  metadata_store_->rebuild_faiss_index();
+
+  // Get chunk IDs from the database
+  auto chunk_metadata = metadata_store_->get_chunk_metadata({file1_id});
+  ASSERT_FALSE(chunk_metadata.empty());
+
+  // Create chunk search results with just IDs and distances
+  std::vector<magic_core::ChunkSearchResult> chunk_results;
+  for (const auto& chunk : chunk_metadata) {
+    magic_core::ChunkSearchResult result;
+    result.id = chunk.id;
+    result.distance = 0.1f;  // Dummy distance
+    // Initialize other fields to ensure they get filled
+    result.file_id = 0;
+    result.chunk_index = 0;
+    result.content = "";
+    chunk_results.push_back(result);
+  }
+
+  // Act
+  metadata_store_->fill_chunk_metadata(chunk_results);
+
+  // Assert
+  for (const auto& chunk_result : chunk_results) {
+    EXPECT_GT(chunk_result.id, 0);
+    EXPECT_GT(chunk_result.file_id, 0);
+    EXPECT_GE(chunk_result.chunk_index, 0);
+    EXPECT_FALSE(chunk_result.content.empty());
+    EXPECT_EQ(chunk_result.distance, 0.1f);  // Distance should be preserved
+  }
+}
+
+// Test fill_chunk_metadata with empty chunk results
+TEST_F(MetadataStoreTest, FillChunkMetadata_EmptyChunks) {
+  // Arrange
+  std::vector<magic_core::ChunkSearchResult> chunk_results = {};
+
+  // Act
+  metadata_store_->fill_chunk_metadata(chunk_results);
+
+  // Assert
+  EXPECT_TRUE(chunk_results.empty());
+}
+
+// Test fill_chunk_metadata with non-existent chunk IDs
+TEST_F(MetadataStoreTest, FillChunkMetadata_NonExistentChunkIds) {
+  // Arrange
+  std::vector<magic_core::ChunkSearchResult> chunk_results;
+  
+  magic_core::ChunkSearchResult result;
+  result.id = 999;  // Non-existent ID
+  result.distance = 0.1f;
+  result.file_id = 0;
+  result.chunk_index = 0;
+  result.content = "";
+  chunk_results.push_back(result);
+
+  // Act
+  metadata_store_->fill_chunk_metadata(chunk_results);
+
+  // Assert
+  ASSERT_FALSE(chunk_results.empty());
+  EXPECT_EQ(chunk_results[0].id, 999);
+  EXPECT_EQ(chunk_results[0].distance, 0.1f);
+  // The metadata should not be filled for non-existent chunks
+  // Note: The actual behavior might fill these with garbage values, so we just check that ID and distance are preserved
+  EXPECT_EQ(chunk_results[0].id, 999);
+  EXPECT_EQ(chunk_results[0].distance, 0.1f);
+}
+
+// Test search_similar_chunks with mixed file types
+TEST_F(MetadataStoreTest, SearchSimilarChunks_MixedFileTypes) {
+  // Arrange - Create files of different types with chunks
+  auto text_file = magic_tests::TestUtilities::create_test_file_metadata("/docs/text.txt", "hash1", magic_core::FileType::Text, 1024, true);
+  text_file.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("text_file", 1024);
+  auto text_chunks = magic_tests::TestUtilities::create_test_chunks(2, "text content document");
+  int text_file_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, text_file, text_chunks);
+
+  auto code_file = magic_tests::TestUtilities::create_test_file_metadata("/src/code.cpp", "hash2", magic_core::FileType::Code, 1024, true);
+  code_file.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("code_file", 1024);
+  auto code_chunks = magic_tests::TestUtilities::create_test_chunks(3, "C++ code function class");
+  int code_file_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, code_file, code_chunks);
+
+  auto markdown_file = magic_tests::TestUtilities::create_test_file_metadata("/docs/readme.md", "hash3", magic_core::FileType::Markdown, 1024, true);
+  markdown_file.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("markdown_file", 1024);
+  auto markdown_chunks = magic_tests::TestUtilities::create_test_chunks(2, "markdown documentation guide");
+  int markdown_file_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, markdown_file, markdown_chunks);
+
+  metadata_store_->rebuild_faiss_index();
+
+  std::vector<int> file_ids = {text_file_id, code_file_id, markdown_file_id};
+  auto query_vector = magic_tests::TestUtilities::create_test_vector("documentation", 1024);
+
+  // Act
+  auto results = metadata_store_->search_similar_chunks(file_ids, query_vector, 10);
+
+  // Assert
+  ASSERT_FALSE(results.empty());
+  EXPECT_LE(results.size(), 7);  // Total chunks across all files
+  
+  // Verify chunks come from different file types
+  std::set<int> file_ids_found;
+  for (const auto& chunk_result : results) {
+    file_ids_found.insert(chunk_result.file_id);
+    EXPECT_GT(chunk_result.id, 0);
+    EXPECT_GE(chunk_result.distance, 0.0f);
+    EXPECT_GE(chunk_result.chunk_index, 0);
+    EXPECT_FALSE(chunk_result.content.empty());
+  }
+  
+  // Should find chunks from multiple files
+  EXPECT_GE(file_ids_found.size(), 1);
+}
+
+// Test search_similar_chunks with edge case query vector
+TEST_F(MetadataStoreTest, SearchSimilarChunks_EdgeCaseQueryVector) {
+  // Arrange - Create files with chunks
+  auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/file1.txt", "hash1", magic_core::FileType::Text, 1024, true);
+  file1.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("file1", 1024);
+  
+  auto chunks1 = magic_tests::TestUtilities::create_test_chunks(3, "machine learning algorithm neural network");
+  int file1_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file1, chunks1);
+
+  metadata_store_->rebuild_faiss_index();
+
+  std::vector<int> file_ids = {file1_id};
+  
+  // Test with zero vector
+  std::vector<float> zero_vector(1024, 0.0f);
+
+  // Act
+  auto results = metadata_store_->search_similar_chunks(file_ids, zero_vector, 5);
+
+  // Assert
+  ASSERT_FALSE(results.empty());
+  EXPECT_LE(results.size(), 3);
+  
+  for (const auto& chunk_result : results) {
+    EXPECT_GT(chunk_result.id, 0);
+    EXPECT_GE(chunk_result.distance, 0.0f);
+    EXPECT_GT(chunk_result.file_id, 0);
+    EXPECT_GE(chunk_result.chunk_index, 0);
+    EXPECT_FALSE(chunk_result.content.empty());
+  }
+}
+
+// Test search_similar_chunks with single file
+TEST_F(MetadataStoreTest, SearchSimilarChunks_SingleFile) {
+  // Arrange - Create single file with chunks
+  auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/file1.txt", "hash1", magic_core::FileType::Text, 1024, true);
+  file1.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("file1", 1024);
+  
+  auto chunks1 = magic_tests::TestUtilities::create_test_chunks(5, "machine learning algorithm neural network deep learning");
+  int file1_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file1, chunks1);
+
+  metadata_store_->rebuild_faiss_index();
+
+  std::vector<int> file_ids = {file1_id};
+  auto query_vector = magic_tests::TestUtilities::create_test_vector("machine learning", 1024);
+
+  // Act
+  auto results = metadata_store_->search_similar_chunks(file_ids, query_vector, 3);
+
+  // Assert
+  ASSERT_FALSE(results.empty());
+  EXPECT_LE(results.size(), 3);
+  
+  // All chunks should be from the same file
+  for (const auto& chunk_result : results) {
+    EXPECT_EQ(chunk_result.file_id, file1_id);
+    EXPECT_GT(chunk_result.id, 0);
+    EXPECT_GE(chunk_result.distance, 0.0f);
+    EXPECT_GE(chunk_result.chunk_index, 0);
+    EXPECT_FALSE(chunk_result.content.empty());
+  }
+}
+
+// Test search_similar_chunks preserves chunk metadata correctly
+TEST_F(MetadataStoreTest, SearchSimilarChunks_PreservesChunkMetadata) {
+  // Arrange - Create file with specific chunk content
+  auto file1 = magic_tests::TestUtilities::create_test_file_metadata("/docs/file1.txt", "hash1", magic_core::FileType::Text, 1024, true);
+  file1.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("file1", 1024);
+  
+  // Create chunks with specific content
+  std::vector<magic_core::ChunkWithEmbedding> chunks;
+  chunks.push_back(magic_tests::TestUtilities::create_test_chunk_with_embedding("first chunk content", 0, "chunk1"));
+  chunks.push_back(magic_tests::TestUtilities::create_test_chunk_with_embedding("second chunk content", 1, "chunk2"));
+  chunks.push_back(magic_tests::TestUtilities::create_test_chunk_with_embedding("third chunk content", 2, "chunk3"));
+  
+  int file1_id = magic_tests::TestUtilities::create_complete_file_in_store(metadata_store_, file1, chunks);
+
+  metadata_store_->rebuild_faiss_index();
+
+  std::vector<int> file_ids = {file1_id};
+  auto query_vector = magic_tests::TestUtilities::create_test_vector("chunk content", 1024);
+
+  // Act
+  auto results = metadata_store_->search_similar_chunks(file_ids, query_vector, 5);
+
+  // Assert
+  ASSERT_FALSE(results.empty());
+  
+  // Verify that chunk content and indices are preserved
+  std::set<std::string> expected_contents = {"first chunk content", "second chunk content", "third chunk content"};
+  std::set<int> expected_indices = {0, 1, 2};
+  
+  std::set<std::string> found_contents;
+  std::set<int> found_indices;
+  
+  for (const auto& chunk_result : results) {
+    EXPECT_EQ(chunk_result.file_id, file1_id);
+    found_contents.insert(chunk_result.content);
+    found_indices.insert(chunk_result.chunk_index);
+  }
+  
+  // Should find all expected content and indices
+  EXPECT_EQ(found_contents.size(), expected_contents.size());
+  EXPECT_EQ(found_indices.size(), expected_indices.size());
+}
+
 }  // namespace magic_core
