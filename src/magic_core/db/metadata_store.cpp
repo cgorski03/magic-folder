@@ -116,7 +116,7 @@ void MetadataStore::create_tables() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         file_id INTEGER NOT NULL,
         chunk_index INTEGER NOT NULL,
-        content TEXT NOT NULL,
+        content BLOB NOT NULL,
         vector_blob BLOB,
         FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
     );
@@ -270,7 +270,7 @@ void MetadataStore::update_file_ai_analysis(int file_id,
 }
 
 void MetadataStore::upsert_chunk_metadata(int file_id,
-                                          const std::vector<ChunkWithEmbedding> &chunks) {
+                                          const std::vector<ProcessedChunk> &chunks) {
   if (chunks.empty())
     return;
 
@@ -292,9 +292,9 @@ void MetadataStore::upsert_chunk_metadata(int file_id,
   for (const auto &ce : chunks) {
     sqlite3_bind_int(stmt, 1, file_id);
     sqlite3_bind_int(stmt, 2, ce.chunk.chunk_index);
-    sqlite3_bind_text(stmt, 3, ce.chunk.content.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_blob(stmt, 4, ce.embedding.data(),
-                      static_cast<int>(ce.embedding.size() * sizeof(float)), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, ce.chunk.content.data(), -1, SQLITE_STATIC);
+    sqlite3_bind_blob(stmt, 4, ce.chunk.vector_embedding.data(),
+                      static_cast<int>(ce.chunk.vector_embedding.size() * sizeof(float)), SQLITE_STATIC);
 
     if (sqlite3_step(stmt) != SQLITE_DONE) {
       sqlite3_finalize(stmt);

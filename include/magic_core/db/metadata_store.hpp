@@ -60,9 +60,9 @@ struct ChunkSearchResult : public SearchResult {
   std::string content;
 };
 
-struct ChunkWithEmbedding {
+struct ProcessedChunk {
   Chunk chunk;
-  std::vector<float> embedding;
+  std::vector<char> compressed_content;
 };
 
 enum class ProcessingStatus { IDLE, PROCESSING, FAILED };
@@ -130,7 +130,7 @@ class MetadataStore {
                                const std::string &suggested_filename = "",
                                ProcessingStatus processing_status = ProcessingStatus::IDLE);
 
-  void upsert_chunk_metadata(int file_id, const std::vector<ChunkWithEmbedding> &chunks);
+  void upsert_chunk_metadata(int file_id, const std::vector<ProcessedChunk> &chunks);
 
   std::vector<ChunkMetadata> get_chunk_metadata(std::vector<int> file_ids);
 
