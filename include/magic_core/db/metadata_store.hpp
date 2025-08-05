@@ -43,7 +43,7 @@ struct ChunkMetadata {
   std::vector<float> vector_embedding;
   int file_id;
   int chunk_index;
-  std::string content;
+  std::vector<char> content;
 };
 struct SearchResult {
   int id;
@@ -57,7 +57,7 @@ struct FileSearchResult : public SearchResult {
 struct ChunkSearchResult : public SearchResult {
   int file_id;
   int chunk_index;
-  std::string content;
+  std::vector<char> compressed_content;
 };
 
 struct ProcessedChunk {

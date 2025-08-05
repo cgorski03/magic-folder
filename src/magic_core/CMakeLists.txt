@@ -24,7 +24,7 @@ list(APPEND MAGIC_CORE_SOURCES
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(utf8cpp CONFIG REQUIRED)
-find_package(Zstd REQUIRED)
+find_package(zstd CONFIG REQUIRED)
 # Create the library
 add_library(magic_core STATIC ${MAGIC_CORE_SOURCES})
 
@@ -43,7 +43,7 @@ target_link_libraries(magic_core
         unofficial::sqlite3::sqlite3
         OpenMP::OpenMP_CXX
         utf8cpp::utf8cpp
-        Zstd::zstd
+        zstd::libzstd
 )
 
 # Include directories

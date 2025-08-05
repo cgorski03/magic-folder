@@ -332,7 +332,16 @@ std::vector<ChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<int> fi
     chunk.id = sqlite3_column_int(stmt, 0);
     chunk.file_id = sqlite3_column_int(stmt, 1);
     chunk.chunk_index = sqlite3_column_int(stmt, 2);
-    chunk.content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
+    const void* blob_data = sqlite3_column_blob(stmt, 3);
+    int blob_size = sqlite3_column_bytes(stmt, 3);
+
+    if (blob_data && blob_size > 0) {
+      const char* char_data = static_cast<const char*>(blob_data);
+      chunk.content.assign(char_data, char_data + blob_size);
+    } else {
+      chunk.content.clear();
+    }
+    
     chunks.push_back(chunk);
   }
 
@@ -359,13 +368,18 @@ void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult>& chunks) 
     throw MetadataStoreError("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
   }
 
-  // Create a map to store metadata by ID
-  std::unordered_map<int, std::tuple<int, int, std::string>> id_to_metadata;
+  // Create a map to store metadata by ID - using vector<char> for content
+  std::unordered_map<int, std::tuple<int, int, std::vector<char>>> id_to_metadata;
   while (sqlite3_step(stmt) == SQLITE_ROW) {
     int id = sqlite3_column_int(stmt, 0);
     int file_id = sqlite3_column_int(stmt, 1);
     int chunk_index = sqlite3_column_int(stmt, 2);
-    std::string content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
+    
+    // Get compressed blob data as vector<char>
+    const char* data = reinterpret_cast<const char*>(sqlite3_column_blob(stmt, 3));
+    int size = sqlite3_column_bytes(stmt, 3);
+    std::vector<char> content(data, data + size);
+    
     id_to_metadata[id] = {file_id, chunk_index, content};
   }
   sqlite3_finalize(stmt);
@@ -376,7 +390,7 @@ void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult>& chunks) 
     if (it != id_to_metadata.end()) {
       chunk.file_id = std::get<0>(it->second);
       chunk.chunk_index = std::get<1>(it->second);
-      chunk.content = std::get<2>(it->second);
+      chunk.compressed_content = std::get<2>(it->second);
     }
     else {
       std::cout << "Chunk with ID " << chunk.id << " not found" << std::endl;

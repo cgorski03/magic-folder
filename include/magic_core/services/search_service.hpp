@@ -22,9 +22,16 @@ class SearchServiceException : public std::exception {
 
 class SearchService {
  public:
+  struct ChunkResultDTO {
+    int id;
+    float distance;
+    int file_id;
+    int chunk_index;
+    std::string content;
+  };
   struct MagicSearchResult {
     std::vector<FileSearchResult> file_results;
-    std::vector<ChunkSearchResult> chunk_results;
+    std::vector<ChunkResultDTO> chunk_results;
   };
   SearchService(std::shared_ptr<MetadataStore> metadata_store,
                 std::shared_ptr<OllamaClient> ollama_client);
