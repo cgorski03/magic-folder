@@ -17,6 +17,7 @@ set(TEST_SOURCES
     extractors/test_content_extractor_factory.cpp
     test_file_processing_service.cpp
     test_search_service.cpp
+    test_compression_service.cpp
 )
 
 # Create single test executable for all tests
@@ -109,4 +110,11 @@ add_custom_target(test_search_service
     COMMAND magic_folder_tests --gtest_filter="SearchServiceTest.*"
     DEPENDS magic_folder_tests
     COMMENT "Running SearchService tests only"
+)
+
+# Add convenience target for compression service tests
+add_custom_target(test_compression_service
+    COMMAND magic_folder_tests --gtest_filter="CompressionServiceTest.*"
+    DEPENDS magic_folder_tests
+    COMMENT "Running CompressionService tests only"
 )

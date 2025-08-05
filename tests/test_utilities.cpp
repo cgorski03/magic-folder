@@ -119,21 +119,21 @@ std::vector<float> TestUtilities::create_test_vector(const std::string& seed_tex
   return vector;
 }
 
-magic_core::ChunkWithEmbedding TestUtilities::create_test_chunk_with_embedding(
+Chunk TestUtilities::create_test_chunk_with_embedding(
     const std::string& content, int chunk_index, const std::string& seed_text) {
   
-  magic_core::ChunkWithEmbedding chunk_with_embedding;
-  chunk_with_embedding.chunk.content = content;
-  chunk_with_embedding.chunk.chunk_index = chunk_index;
-  chunk_with_embedding.embedding = create_test_vector(seed_text + "_chunk_" + std::to_string(chunk_index), 1024);
+  Chunk chunk;
+  chunk.content = content;
+  chunk.chunk_index = chunk_index;
+  chunk.vector_embedding = create_test_vector(seed_text + "_chunk_" + std::to_string(chunk_index), 1024);
   
-  return chunk_with_embedding;
+  return chunk;
 }
 
-std::vector<magic_core::ChunkWithEmbedding> TestUtilities::create_test_chunks(
+std::vector<Chunk> TestUtilities::create_test_chunks(
     int count, const std::string& base_content) {
   
-  std::vector<magic_core::ChunkWithEmbedding> chunks;
+  std::vector<Chunk> chunks;
   chunks.reserve(count);
 
   for (int i = 0; i < count; ++i) {
@@ -156,7 +156,7 @@ void TestUtilities::populate_metadata_store_with_stubs(
 int TestUtilities::create_complete_file_in_store(
     std::shared_ptr<magic_core::MetadataStore> store,
     const magic_core::FileMetadata& metadata,
-    const std::vector<magic_core::ChunkWithEmbedding>& chunks) {
+    const std::vector<Chunk>& chunks) {
   
   // First create the basic stub
   magic_core::BasicFileMetadata basic_metadata;
@@ -180,7 +180,20 @@ int TestUtilities::create_complete_file_in_store(
 
   // Add chunks if provided
   if (!chunks.empty()) {
-    store->upsert_chunk_metadata(file_id, chunks);
+    // Convert Chunk to ProcessedChunk with mock compressed content
+    std::vector<magic_core::ProcessedChunk> processed_chunks;
+    processed_chunks.reserve(chunks.size());
+    
+    for (const auto& chunk : chunks) {
+      magic_core::ProcessedChunk processed_chunk;
+      processed_chunk.chunk = chunk;
+      // Use mock compressed content for testing (not actual compression)
+      std::string mock_compressed = "compressed_" + chunk.content;
+      processed_chunk.compressed_content = std::vector<char>(mock_compressed.begin(), mock_compressed.end());
+      processed_chunks.push_back(std::move(processed_chunk));
+    }
+    
+    store->upsert_chunk_metadata(file_id, processed_chunks);
   }
 
   return file_id;

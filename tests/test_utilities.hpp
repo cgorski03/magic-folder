@@ -47,10 +47,10 @@ class TestUtilities {
 
   static std::vector<float> create_test_vector(const std::string& seed_text, int dimension = 1024);
 
-  static magic_core::ChunkWithEmbedding create_test_chunk_with_embedding(
+  static Chunk create_test_chunk_with_embedding(
       const std::string& content, int chunk_index, const std::string& seed_text);
 
-  static std::vector<magic_core::ChunkWithEmbedding> create_test_chunks(
+  static std::vector<Chunk> create_test_chunks(
       int count, const std::string& base_content = "test content");
 
   // Metadata store utilities - updated for new API
@@ -61,7 +61,7 @@ class TestUtilities {
   static int create_complete_file_in_store(
       std::shared_ptr<magic_core::MetadataStore> store,
       const magic_core::FileMetadata& metadata,
-      const std::vector<magic_core::ChunkWithEmbedding>& chunks = {});
+      const std::vector<Chunk>& chunks = {});
 };
 
 /**
