@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "magic_core/extractors/plaintext_extractor.hpp"
-#include "test_utilities.hpp"
+#include "../../common/utilities_test.hpp"
 
 namespace magic_core {
 

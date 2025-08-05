@@ -6,8 +6,8 @@
 #include "magic_core/db/metadata_store.hpp"
 #include "magic_core/llm/ollama_client.hpp"
 #include "magic_core/services/search_service.hpp"
-#include "test_mocks.hpp"
-#include "test_utilities.hpp"
+#include "../../common/mocks_test.hpp"
+#include "../../common/utilities_test.hpp"
 
 namespace magic_core {
 

@@ -6,7 +6,7 @@
 
 #include "magic_core/db/metadata_store.hpp"
 #include "magic_core/services/file_delete_service.hpp"
-#include "test_utilities.hpp"
+#include "../../common/utilities_test.hpp"
 
 namespace magic_core {
 

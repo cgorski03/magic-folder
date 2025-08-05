@@ -2,9 +2,8 @@
 #include <memory>
 #include <optional>
 #include <vector>
-
 #include "magic_core/db/metadata_store.hpp"
-#include "test_utilities.hpp"
+#include "../../common/utilities_test.hpp"
 
 namespace magic_core {
 
