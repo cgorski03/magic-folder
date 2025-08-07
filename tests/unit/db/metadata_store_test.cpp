@@ -75,7 +75,7 @@ TEST_F(MetadataStoreTest, CreateFileStub_WithAllFields) {
   EXPECT_EQ(retrieved->processing_status, "IDLE");
 }
 
-TEST_F(MetadataStoreTest, CreateFileStub_DuplicatePathThrows) {
+TEST_F(MetadataStoreTest, CreateFileStub_DuplicatePathUpdates) {
   // Arrange
   auto metadata1 =
       magic_tests::TestUtilities::create_test_basic_file_metadata("/test/duplicate.txt", "hash1");
@@ -94,6 +94,39 @@ TEST_F(MetadataStoreTest, CreateFileStub_DuplicatePathThrows) {
   auto retrieved = metadata_store_->get_file_metadata(file_id2);
   ASSERT_TRUE(retrieved.has_value());
   EXPECT_EQ(retrieved->file_hash, "hash2");
+}
+
+TEST_F(MetadataStoreTest, CreateFileStub_UpdateResetsAIFields) {
+  // Arrange - Create a file stub first
+  auto initial_metadata =
+      magic_tests::TestUtilities::create_test_basic_file_metadata("/test/reset_ai.txt", "hash1");
+  int file_id = metadata_store_->upsert_file_stub(initial_metadata);
+
+  // Add AI analysis to the file
+  auto test_vector = magic_tests::TestUtilities::create_test_vector("ai_analysis", 1024);
+  metadata_store_->update_file_ai_analysis(file_id, test_vector, "old_category", "old_filename.txt");
+
+  // Verify AI fields are set
+  auto with_ai = metadata_store_->get_file_metadata(file_id);
+  ASSERT_TRUE(with_ai.has_value());
+  EXPECT_EQ(with_ai->summary_vector_embedding.size(), 1024);
+  EXPECT_EQ(with_ai->suggested_category, "old_category");
+  EXPECT_EQ(with_ai->suggested_filename, "old_filename.txt");
+
+  // Act - Update the file stub with new hash (simulating file content change)
+  auto updated_metadata =
+      magic_tests::TestUtilities::create_test_basic_file_metadata("/test/reset_ai.txt", "hash2");
+  int updated_file_id = metadata_store_->upsert_file_stub(updated_metadata);
+
+  // Assert - Should be same file ID but AI fields should be reset
+  EXPECT_EQ(file_id, updated_file_id);
+  
+  auto after_update = metadata_store_->get_file_metadata(file_id);
+  ASSERT_TRUE(after_update.has_value());
+  EXPECT_EQ(after_update->file_hash, "hash2");  // Basic metadata updated
+  EXPECT_TRUE(after_update->summary_vector_embedding.empty());  // AI vector reset
+  EXPECT_TRUE(after_update->suggested_category.empty());  // AI category reset
+  EXPECT_TRUE(after_update->suggested_filename.empty());  // AI filename reset
 }
 
 // Tests for update_file_ai_analysis
