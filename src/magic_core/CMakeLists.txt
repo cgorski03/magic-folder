@@ -21,6 +21,7 @@ list(APPEND MAGIC_CORE_SOURCES
     ${ASYNC_SOURCES}
 )
 
+find_path(SQLITE_MODERN_CPP_INCLUDE_DIRS "sqlite_modern_cpp.h")
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(utf8cpp CONFIG REQUIRED)
@@ -49,6 +50,7 @@ target_link_libraries(magic_core
 # Include directories
 target_include_directories(magic_core PUBLIC
     ${CMAKE_SOURCE_DIR}/include
+    ${SQLITE_MODERN_CPP_INCLUDE_DIRS}
 )
 
 # Compiler flags

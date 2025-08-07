@@ -6,7 +6,7 @@
 #include <faiss/IndexIDMap.h>
 // Why is this file named with a different convention
 #include <faiss/index_io.h>
-#include <sqlite3.h>
+#include <sqlite_modern_cpp.h>
 
 #include <chrono>
 #include <filesystem>
@@ -119,9 +119,6 @@ class MetadataStore {
   // Initialize the database and build the Faiss index
   void initialize();
 
-  // Add or update file metadata (now including vector embedding)
-  void upsert_file_metadata(const FileMetadata &metadata);
-
   int upsert_file_stub(const BasicFileMetadata &basic_metadata);
 
   void update_file_ai_analysis(int file_id,
@@ -158,8 +155,8 @@ class MetadataStore {
 
  private:
   std::filesystem::path db_path_;
-  sqlite3 *db_;
-
+  std::unique_ptr<sqlite::database> db_;
+    
   // In-memory Faiss index
   faiss::IndexIDMap *faiss_index_;
 
@@ -173,7 +170,6 @@ class MetadataStore {
   void search_faiss_index(faiss::IndexIDMap *index, const std::vector<float> &query_vector, int k, std::vector<float> &results, std::vector<faiss::idx_t> &labels);
 
   void create_tables();
-  void execute_sql(const std::string &sql);
   std::chrono::system_clock::time_point get_file_last_modified(
       const std::filesystem::path &file_path);
   // Time point conversions
