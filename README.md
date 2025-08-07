@@ -80,12 +80,14 @@ Magic Folder C++ is a C++ implementation that automatically processes files, gen
   - [ ] Add priority and error handling
   - [ ] Support task retry logic
 #### 1.25 Data Storage Optimization
-- [ ] **Encode `content` blob**
-  - [ ] Implement encoding in the content blob field for the chunks
+- [x] **Encode `content` blob**
+  - [x] Setup zstd library integration
+  - [x] Implement encoding in the content blob field for the chunks
 
 - [ ] **Encrypt Data at rest**
   - [ ] Implement class for handling encryption key at OS level
-  - [ ] Migrate to SQLCipher
+  - [ ] Migrate database to use sqlite-modern and eliminate boilerplate
+  - [ ] Migrate database to SQLCipher
 
 #### 1.3 Search System Enhancement
 - [x] **Two-Stage Search Implementation**
