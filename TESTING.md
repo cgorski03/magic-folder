@@ -71,6 +71,23 @@ ctest --output-on-failure --verbose
 ### Test Structure
 
 All tests are compiled into a single executable (`magic_folder_tests`) for efficiency and better organization.
+### Encryption and Database Key Tests
+
+With database encryption enabled (SQLCipher), tests now initialize the `MetadataStore` with a deterministic 32-byte key. The base fixture `tests/common/utilities_test.hpp` constructs `MetadataStore` with a test key so all existing tests work unchanged. Additional tests verify encryption behavior:
+
+- Open with wrong key throws: Ensures you cannot open the same DB with an incorrect key.
+- Open with correct key succeeds: Confirms the same key can reopen the DB.
+
+You can run just these tests with:
+
+```bash
+./bin/magic_folder_tests --gtest_filter="MetadataStoreTest.OpenWith*Key*"
+```
+
+Notes:
+- Keys used in tests are simple repeated characters for determinism; production uses the OS keychain via `EncryptionKeyService`.
+- SQLCipher accepts arbitrary passphrase strings; in production, we store a 32-byte random key.
+
 
 #### FileInfoService Tests
 
@@ -105,12 +122,19 @@ The tests use **integration testing** approach rather than mocking:
 - Temporary databases are created and cleaned up for each test
 - Shared test utilities (`test_utilities.hpp`) provide common functionality
 
+### Encryption Key Handling in Tests
+
+- Test fixtures create a temporary SQLite database file and pass a fixed test key when constructing `MetadataStore`.
+- Production code acquires the key from the OS secure store using `magic_core::EncryptionKeyService::get_database_key()`; tests do not call the OS keychain.
+- If you add tests that construct `MetadataStore` directly, provide a key: `MetadataStore(db_path, std::string(32, 'K'))`.
+
 ### Why Integration Tests?
 
 1. **Simple Architecture**: `FileInfoService` is a thin wrapper around `MetadataStore`
 2. **Real World Testing**: Tests the actual integration between components
 3. **Database Operations**: Ensures SQLite operations work correctly
 4. **Vector Embeddings**: Tests the full pipeline including Faiss index operations
+5. **Encryption**: Validates that encrypted databases cannot be opened with wrong keys
 
 ## Test Data
 

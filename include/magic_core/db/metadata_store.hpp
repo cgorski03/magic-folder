@@ -108,7 +108,6 @@ class MetadataStore {
  public:
   static constexpr int VECTOR_DIMENSION = 1024;
   explicit MetadataStore(const std::filesystem::path& db_path, const std::string& db_key);
-  explicit MetadataStore(const std::filesystem::path &db_path);
   ~MetadataStore();
 
   // Disable copy constructor and assignment

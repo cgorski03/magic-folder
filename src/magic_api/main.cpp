@@ -11,6 +11,7 @@
 #include "magic_core/services/file_info_service.hpp"
 #include "magic_core/services/file_processing_service.hpp"
 #include "magic_core/services/search_service.hpp"
+#include "magic_core/services/encryption_key_service.hpp"
 
 int main() {
   try {
@@ -20,7 +21,7 @@ int main() {
     std::string metadata_path = config.metadata_db_path;
     std::string ollama_server_url = config.ollama_url;
     std::string model = config.embedding_model;
-
+    std::string db_key = magic_core::EncryptionKeyService::get_database_key();
     std::cout << "Starting Magic Folder API Server..." << std::endl;
     std::cout << "Server URL: " << server_url << std::endl;
     std::cout << "Metadata DB Path: " << metadata_path << std::endl;
@@ -29,7 +30,7 @@ int main() {
 
     // Initialize core components
     auto ollama_client = std::make_shared<magic_core::OllamaClient>(ollama_server_url, model);
-    auto metadata_store = std::make_shared<magic_core::MetadataStore>(metadata_path);
+    auto metadata_store = std::make_shared<magic_core::MetadataStore>(metadata_path, db_key);
     auto content_extractor_factory = std::make_shared<magic_core::ContentExtractorFactory>();
 
     auto file_processing_service = std::make_shared<magic_core::FileProcessingService>(
