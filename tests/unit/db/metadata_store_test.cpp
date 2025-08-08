@@ -889,4 +889,231 @@ TEST_F(MetadataStoreTest, OpenWithCorrectKey_Succeeds) {
   });
 }
 
+// ===== TASK QUEUE TESTS =====
+
+// Test basic task creation
+TEST_F(MetadataStoreTest, CreateTask_BasicFunctionality) {
+  // Arrange
+  std::string task_type = "PROCESS_NEW_FILE";
+  std::string file_path = "/test/new_file.txt";
+  int priority = 5;
+
+  // Act
+  long long task_id = metadata_store_->create_task(task_type, file_path, priority);
+
+  // Assert
+  EXPECT_GT(task_id, 0);
+
+  auto pending_tasks = metadata_store_->get_tasks_by_status(TaskStatus::PENDING);
+  ASSERT_EQ(pending_tasks.size(), 1);
+  EXPECT_EQ(pending_tasks[0].id, task_id);
+  EXPECT_EQ(pending_tasks[0].task_type, task_type);
+  EXPECT_EQ(pending_tasks[0].file_path, file_path);
+  EXPECT_EQ(pending_tasks[0].status, TaskStatus::PENDING);
+  EXPECT_EQ(pending_tasks[0].priority, priority);
+}
+
+// Test task creation with default priority
+TEST_F(MetadataStoreTest, CreateTask_DefaultPriority) {
+  // Arrange
+  std::string task_type = "PROCESS_NEW_FILE";
+  std::string file_path = "/test/default_priority.txt";
+
+  // Act
+  long long task_id = metadata_store_->create_task(task_type, file_path);
+
+  // Assert
+  auto pending_tasks = metadata_store_->get_tasks_by_status(TaskStatus::PENDING);
+  ASSERT_EQ(pending_tasks.size(), 1);
+  EXPECT_EQ(pending_tasks[0].priority, 10);  // Default priority
+}
+
+// Test fetching and claiming next task
+TEST_F(MetadataStoreTest, FetchAndClaimNextTask_BasicFunctionality) {
+  // Arrange - Create multiple tasks with different priorities
+  long long task1_id = metadata_store_->create_task("PROCESS_FILE", "/test/file1.txt", 5);
+  long long task2_id = metadata_store_->create_task("PROCESS_FILE", "/test/file2.txt", 1); // Higher priority
+  long long task3_id = metadata_store_->create_task("PROCESS_FILE", "/test/file3.txt", 10);
+
+  // Act
+  auto claimed_task = metadata_store_->fetch_and_claim_next_task();
+
+  // Assert
+  ASSERT_TRUE(claimed_task.has_value());
+  EXPECT_EQ(claimed_task->id, task2_id);  // Should get highest priority task
+  EXPECT_EQ(claimed_task->status, TaskStatus::PROCESSING);
+  EXPECT_EQ(claimed_task->priority, 1);
+
+  // Verify the task is marked as PROCESSING in the database
+  auto processing_tasks = metadata_store_->get_tasks_by_status(TaskStatus::PROCESSING);
+  ASSERT_EQ(processing_tasks.size(), 1);
+  EXPECT_EQ(processing_tasks[0].id, task2_id);
+}
+
+// Test fetching when no tasks are pending
+TEST_F(MetadataStoreTest, FetchAndClaimNextTask_NoTasksAvailable) {
+  // Act
+  auto claimed_task = metadata_store_->fetch_and_claim_next_task();
+
+  // Assert
+  EXPECT_FALSE(claimed_task.has_value());
+}
+
+// Test updating task status
+TEST_F(MetadataStoreTest, UpdateTaskStatus_BasicFunctionality) {
+  // Arrange
+  long long task_id = metadata_store_->create_task("PROCESS_FILE", "/test/file.txt");
+
+  // Act
+  metadata_store_->update_task_status(task_id, TaskStatus::COMPLETED);
+
+  // Assert
+  auto completed_tasks = metadata_store_->get_tasks_by_status(TaskStatus::COMPLETED);
+  ASSERT_EQ(completed_tasks.size(), 1);
+  EXPECT_EQ(completed_tasks[0].id, task_id);
+  EXPECT_EQ(completed_tasks[0].status, TaskStatus::COMPLETED);
+
+  auto pending_tasks = metadata_store_->get_tasks_by_status(TaskStatus::PENDING);
+  EXPECT_EQ(pending_tasks.size(), 0);
+}
+
+// Test marking task as failed
+TEST_F(MetadataStoreTest, MarkTaskAsFailed_BasicFunctionality) {
+  // Arrange
+  long long task_id = metadata_store_->create_task("PROCESS_FILE", "/test/file.txt");
+  std::string error_message = "File not found";
+
+  // Act
+  metadata_store_->mark_task_as_failed(task_id, error_message);
+
+  // Assert
+  auto failed_tasks = metadata_store_->get_tasks_by_status(TaskStatus::FAILED);
+  ASSERT_EQ(failed_tasks.size(), 1);
+  EXPECT_EQ(failed_tasks[0].id, task_id);
+  EXPECT_EQ(failed_tasks[0].status, TaskStatus::FAILED);
+  EXPECT_EQ(failed_tasks[0].error_message, error_message);
+}
+
+// Test getting tasks by status
+TEST_F(MetadataStoreTest, GetTasksByStatus_MultipleStatuses) {
+  // Arrange
+  long long pending_task1 = metadata_store_->create_task("PROCESS_FILE", "/test/file1.txt", 5);
+  long long pending_task2 = metadata_store_->create_task("PROCESS_FILE", "/test/file2.txt", 1);
+  long long processing_task = metadata_store_->create_task("PROCESS_FILE", "/test/file3.txt", 3);
+  
+  metadata_store_->update_task_status(processing_task, TaskStatus::PROCESSING);
+
+  // Act & Assert - Test PENDING tasks
+  auto pending_tasks = metadata_store_->get_tasks_by_status(TaskStatus::PENDING);
+  ASSERT_EQ(pending_tasks.size(), 2);
+  // Should be ordered by priority (ascending), then by created_at
+  EXPECT_EQ(pending_tasks[0].id, pending_task2);  // Priority 1
+  EXPECT_EQ(pending_tasks[1].id, pending_task1);  // Priority 5
+
+  // Act & Assert - Test PROCESSING tasks
+  auto processing_tasks = metadata_store_->get_tasks_by_status(TaskStatus::PROCESSING);
+  ASSERT_EQ(processing_tasks.size(), 1);
+  EXPECT_EQ(processing_tasks[0].id, processing_task);
+
+  // Act & Assert - Test non-existent status
+  auto completed_tasks = metadata_store_->get_tasks_by_status(TaskStatus::COMPLETED);
+  EXPECT_EQ(completed_tasks.size(), 0);
+}
+
+// Test clearing completed tasks
+TEST_F(MetadataStoreTest, ClearCompletedTasks_BasicFunctionality) {
+  // Arrange - Create tasks with different statuses
+  long long pending_task = metadata_store_->create_task("PROCESS_FILE", "/test/file1.txt");
+  long long completed_task = metadata_store_->create_task("PROCESS_FILE", "/test/file2.txt");
+  long long failed_task = metadata_store_->create_task("PROCESS_FILE", "/test/file3.txt");
+  
+  metadata_store_->update_task_status(completed_task, TaskStatus::COMPLETED);
+  metadata_store_->mark_task_as_failed(failed_task, "Test error");
+
+  // Act - Clear tasks older than 0 days (should clear all completed/failed)
+  metadata_store_->clear_completed_tasks(0);
+
+  // Assert
+  auto pending_tasks = metadata_store_->get_tasks_by_status(TaskStatus::PENDING);
+  EXPECT_EQ(pending_tasks.size(), 1);  // Should still have pending task
+  EXPECT_EQ(pending_tasks[0].id, pending_task);
+
+  auto completed_tasks = metadata_store_->get_tasks_by_status(TaskStatus::COMPLETED);
+  EXPECT_EQ(completed_tasks.size(), 0);  // Should be cleared
+
+  auto failed_tasks = metadata_store_->get_tasks_by_status(TaskStatus::FAILED);
+  EXPECT_EQ(failed_tasks.size(), 0);  // Should be cleared
+}
+
+// Test task priority ordering
+TEST_F(MetadataStoreTest, TaskPriorityOrdering_CorrectOrder) {
+  // Arrange - Create tasks in random order but with specific priorities
+  long long task_low = metadata_store_->create_task("PROCESS_FILE", "/test/low.txt", 10);
+  long long task_high = metadata_store_->create_task("PROCESS_FILE", "/test/high.txt", 1);
+  long long task_med = metadata_store_->create_task("PROCESS_FILE", "/test/med.txt", 5);
+
+  // Act - Fetch tasks one by one
+  auto first_task = metadata_store_->fetch_and_claim_next_task();
+  auto second_task = metadata_store_->fetch_and_claim_next_task();
+  auto third_task = metadata_store_->fetch_and_claim_next_task();
+
+  // Assert - Should be fetched in priority order (lower number = higher priority)
+  ASSERT_TRUE(first_task.has_value());
+  EXPECT_EQ(first_task->id, task_high);  // Priority 1
+
+  ASSERT_TRUE(second_task.has_value());
+  EXPECT_EQ(second_task->id, task_med);  // Priority 5
+
+  ASSERT_TRUE(third_task.has_value());
+  EXPECT_EQ(third_task->id, task_low);  // Priority 10
+
+  // No more tasks should be available
+  auto no_task = metadata_store_->fetch_and_claim_next_task();
+  EXPECT_FALSE(no_task.has_value());
+}
+
+// Test task timestamps
+TEST_F(MetadataStoreTest, TaskTimestamps_AreSetCorrectly) {
+  // Arrange
+  auto before_create = std::chrono::system_clock::now();
+  // Reduce precision to seconds to match database storage
+  before_create = std::chrono::time_point_cast<std::chrono::seconds>(before_create);
+  
+  // Act
+  long long task_id = metadata_store_->create_task("PROCESS_FILE", "/test/file.txt");
+  
+  auto after_create = std::chrono::system_clock::now();
+  after_create = std::chrono::time_point_cast<std::chrono::seconds>(after_create) + std::chrono::seconds(1);
+
+  // Assert
+  auto tasks = metadata_store_->get_tasks_by_status(TaskStatus::PENDING);
+  ASSERT_EQ(tasks.size(), 1);
+  
+  auto& task = tasks[0];
+  EXPECT_GE(task.created_at, before_create);
+  EXPECT_LE(task.created_at, after_create);
+  EXPECT_GE(task.updated_at, before_create);
+  EXPECT_LE(task.updated_at, after_create);
+  EXPECT_EQ(task.created_at, task.updated_at);  // Should be same initially
+}
+
+// Test concurrent task claiming (basic simulation)
+TEST_F(MetadataStoreTest, TaskClaiming_AtomicOperation) {
+  // Arrange
+  long long task_id = metadata_store_->create_task("PROCESS_FILE", "/test/file.txt");
+
+  // Act - Simulate two workers trying to claim the same task
+  auto task1 = metadata_store_->fetch_and_claim_next_task();
+  auto task2 = metadata_store_->fetch_and_claim_next_task();
+
+  // Assert - Only one should succeed
+  EXPECT_TRUE(task1.has_value());
+  EXPECT_FALSE(task2.has_value());
+  
+  if (task1.has_value()) {
+    EXPECT_EQ(task1->id, task_id);
+    EXPECT_EQ(task1->status, TaskStatus::PROCESSING);
+  }
+}
+
 } // namespace magic_core
