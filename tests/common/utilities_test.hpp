@@ -71,7 +71,9 @@ class MetadataStoreTestBase : public ::testing::Test {
  protected:
   void SetUp() override {
     temp_db_path_ = TestUtilities::create_temp_test_db();
-    metadata_store_ = std::make_shared<magic_core::MetadataStore>(temp_db_path_);
+      // Use a deterministic 32-byte key for testing (SQLCipher accepts arbitrary-length passphrases)
+      const std::string test_db_key(32, 'K');
+      metadata_store_ = std::make_shared<magic_core::MetadataStore>(temp_db_path_, test_db_key);
   }
 
   void TearDown() override {

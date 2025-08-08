@@ -855,3 +855,38 @@ TEST_F(MetadataStoreTest, SearchSimilarChunks_PreservesChunkMetadata) {
 }
 
 }  // namespace magic_core
+
+// ===== Encryption tests =====
+namespace magic_core {
+
+// Verifies that opening the same database file with a wrong key fails
+TEST_F(MetadataStoreTest, OpenWithWrongKey_Throws) {
+  // Arrange: ensure DB is initialized by performing a simple write
+  auto basic_metadata = magic_tests::TestUtilities::create_test_basic_file_metadata(
+      "/test/encrypted.txt", "hash123", FileType::Text, 128, "IDLE");
+  EXPECT_NO_THROW({ metadata_store_->upsert_file_stub(basic_metadata); });
+
+  // Act + Assert: using an incorrect key must throw
+  const std::string wrong_key(32, 'W');
+  EXPECT_THROW({
+    // Create a fresh instance against the same path but wrong key
+    magic_core::MetadataStore wrong_store(temp_db_path_, wrong_key);
+    (void)wrong_store; // silence unused var warning
+  }, magic_core::MetadataStoreError);
+}
+
+// Verifies that reopening with the correct key succeeds
+TEST_F(MetadataStoreTest, OpenWithCorrectKey_Succeeds) {
+  // Arrange: the fixture already created the DB with the test key
+
+  // Use the same deterministic key as in the fixture
+  const std::string correct_key(32, 'K');
+
+  // Act & Assert: constructing another instance with the same key should not throw
+  EXPECT_NO_THROW({
+    magic_core::MetadataStore store_again(temp_db_path_, correct_key);
+    (void)store_again;
+  });
+}
+
+} // namespace magic_core
