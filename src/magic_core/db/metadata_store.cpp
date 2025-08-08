@@ -499,9 +499,6 @@ void MetadataStore::rebuild_faiss_index() {
     if (current_num_vectors > 0) {
       // Add all vectors to the Faiss index in one go
       faiss_index_->add_with_ids(current_num_vectors, all_vectors_flat.data(), faiss_ids.data());
-      std::cout << "Faiss index rebuilt with " << current_num_vectors << " vectors." << std::endl;
-    } else {
-      std::cout << "Faiss index rebuilt, no vectors found to add." << std::endl;
     }
   } catch (const sqlite::sqlite_exception &e) {
     throw MetadataStoreError("Failed to rebuild Faiss index: " + std::string(e.what()));
