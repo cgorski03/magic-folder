@@ -145,9 +145,6 @@ TEST_F(PlainTextExtractorTest, GetChunks_SmallParagraphs_MergingBehavior) {
 
   // Act
   auto chunks = extractor_->get_chunks(file);
-  for (const auto& chunk : chunks) {
-    std::cout << "Chunk: " << chunk.content << std::endl;
-  }
   // Assert
   // First 3 paragraphs should merge (together they exceed MIN_SIZE)
   // Last paragraph should be separate due to "last section" rule

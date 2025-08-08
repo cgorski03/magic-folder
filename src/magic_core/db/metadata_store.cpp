@@ -581,9 +581,6 @@ std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
     // Build a faiss index of the chunks by batch adding at the end
     if (current_num_vectors > 0) {
       chunk_index->add_with_ids(current_num_vectors, all_vectors_flat.data(), faiss_ids.data());
-      std::cout << "Chunk index built with " << current_num_vectors << " vectors." << std::endl;
-    } else {
-      std::cout << "Chunk index built, no vectors found to add." << std::endl;
     }
 
     // Search the faiss index for the query vector

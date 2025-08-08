@@ -40,7 +40,6 @@ magic_core::ProcessFileResult FileProcessingService::process_file(
   basic_file_metadata.file_hash = extraction_result.content_hash;
 
   int file_id = metadata_store_->upsert_file_stub(basic_file_metadata);
-  std::cout << "File ID: " << file_id << std::endl;
   // Use chunks from same read (no additional file I/O)
   std::vector<magic_core::ProcessedChunk> processed_chunks = {};
 
@@ -98,7 +97,6 @@ magic_core::ProcessFileResult FileProcessingService::process_file(
     }
   } catch (const std::exception& e) {
     // Update the metadata store to reflect the failure
-    std::cout << "Error processing file: " << e.what() << std::endl;
     metadata_store_->update_file_ai_analysis(file_id, {}, "", "", ProcessingStatus::FAILED);
     return ProcessFileResult::failure_response(e.what());
 
