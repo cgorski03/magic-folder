@@ -1,4 +1,6 @@
 #pragma once
+#define SQLITE_HAS_CODEC 1
+#define SQLCIPHER_CRYPTO_OPENSSL 1
 
 #include <faiss/Index.h>
 #include <faiss/IndexFlat.h>
@@ -6,13 +8,14 @@
 #include <faiss/IndexIDMap.h>
 // Why is this file named with a different convention
 #include <faiss/index_io.h>
+#include <sqlcipher/sqlite3.h>
 #include <sqlite_modern_cpp.h>
-
 #include <chrono>
 #include <filesystem>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "magic_core/types/chunk.hpp"
 #include "magic_core/types/file.hpp"
@@ -104,7 +107,7 @@ class MetadataStoreError : public std::exception {
 class MetadataStore {
  public:
   static constexpr int VECTOR_DIMENSION = 1024;
-
+  explicit MetadataStore(const std::filesystem::path& db_path, const std::string& db_key);
   explicit MetadataStore(const std::filesystem::path &db_path);
   ~MetadataStore();
 

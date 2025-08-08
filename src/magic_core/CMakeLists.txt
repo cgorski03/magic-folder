@@ -22,7 +22,23 @@ list(APPEND MAGIC_CORE_SOURCES
 )
 
 find_path(SQLITE_MODERN_CPP_INCLUDE_DIRS "sqlite_modern_cpp.h")
-find_package(unofficial-sqlite3 CONFIG REQUIRED)
+
+# Find SQLCipher installed via Homebrew
+find_path(SQLCIPHER_INCLUDE_DIR sqlcipher/sqlite3.h
+    PATHS /opt/homebrew/include
+    NO_DEFAULT_PATH
+)
+
+find_library(SQLCIPHER_LIBRARY 
+    NAMES sqlcipher
+    PATHS /opt/homebrew/lib
+    NO_DEFAULT_PATH
+)
+
+if(NOT SQLCIPHER_INCLUDE_DIR OR NOT SQLCIPHER_LIBRARY)
+    message(FATAL_ERROR "SQLCipher not found. Please install with: brew install sqlcipher")
+endif()
+
 find_package(OpenMP REQUIRED)
 find_package(utf8cpp CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
@@ -41,7 +57,7 @@ target_link_libraries(magic_core
     PRIVATE
         CURL::libcurl
         Threads::Threads
-        unofficial::sqlite3::sqlite3
+        ${SQLCIPHER_LIBRARY}
         OpenMP::OpenMP_CXX
         utf8cpp::utf8cpp
         zstd::libzstd
@@ -51,6 +67,12 @@ target_link_libraries(magic_core
 target_include_directories(magic_core PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     ${SQLITE_MODERN_CPP_INCLUDE_DIRS}
+    ${SQLCIPHER_INCLUDE_DIR}
+)
+
+target_compile_definitions(magic_core PRIVATE
+    SQLITE_HAS_CODEC
+    SQLCIPHER_CRYPTO_OPENSSL
 )
 
 # Compiler flags

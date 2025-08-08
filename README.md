@@ -86,7 +86,7 @@ Magic Folder C++ is a C++ implementation that automatically processes files, gen
 
 - [ ] **Encrypt Data at rest**
   - [ ] Implement class for handling encryption key at OS level
-  - [ ] Migrate database to use sqlite-modern and eliminate boilerplate
+  - [x] Migrate database to use sqlite-modern and eliminate boilerplate
   - [ ] Migrate database to SQLCipher
 
 #### 1.3 Search System Enhancement
