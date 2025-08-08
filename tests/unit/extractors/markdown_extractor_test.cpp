@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "magic_core/extractors/markdown_extractor.hpp"
-#include "test_utilities.hpp"
+#include "../../common/utilities_test.hpp"
 
 namespace magic_core {
 
@@ -155,14 +155,10 @@ TEST_F(MarkdownExtractorTest, GetChunks_SmallSections_MergingBehavior) {
   std::string section3 = create_markdown_subsection("Section Three", section_size / 2, 'c'); // Smaller last section
   
   std::string content = section1 + "\n\n" + section2 + "\n\n" + section3;
-  std::cout << "Content: " << content << std::endl;
   auto file = create_test_file("merging.md", content);
 
   // Act
   auto chunks = extractor_->get_chunks(file);
-  for (const auto& chunk : chunks) {
-    std::cout << "Chunk: " << chunk.content << std::endl;
-  }
   // Assert
   // First two sections should merge (together they exceed MIN_SIZE)
   // Last section should be separate due to "last section" rule

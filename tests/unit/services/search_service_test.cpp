@@ -1,16 +1,13 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
-#include <algorithm>
-#include <filesystem>
 #include <memory>
 #include <vector>
 
 #include "magic_core/db/metadata_store.hpp"
 #include "magic_core/llm/ollama_client.hpp"
 #include "magic_core/services/search_service.hpp"
-#include "test_mocks.hpp"
-#include "test_utilities.hpp"
+#include "../../common/mocks_test.hpp"
+#include "../../common/utilities_test.hpp"
 
 namespace magic_core {
 
@@ -33,8 +30,7 @@ class SearchServiceTest : public magic_tests::MetadataStoreTestBase {
     // Create the service with mocked dependencies
     search_service_ = std::make_unique<magic_core::SearchService>(metadata_store_, mock_ollama_client_);
 
-    // Initialize the metadata store
-    metadata_store_->initialize();
+    // Metadata store is initialized by the fixture (constructor handles setup with encryption)
 
     // Set up test data
     setupTestData();

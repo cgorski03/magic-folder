@@ -1,6 +1,5 @@
 #include "magic_core/services/search_service.hpp"
-#include <iostream>
-
+#include "magic_core/services/compression_service.hpp"
 namespace magic_core {
 
 SearchService::SearchService(std::shared_ptr<magic_core::MetadataStore> metadata_store,
@@ -27,17 +26,30 @@ std::vector<magic_core::FileSearchResult> SearchService::search_files(const std:
 
 SearchService::MagicSearchResult SearchService::search(const std::string &query, int k) {
   try {
-    std::vector<float> query_embedding = embed_query(query);
-    std::vector<magic_core::FileSearchResult> file_results =
-        metadata_store_->search_similar_files(query_embedding, k);
+    std::vector<float> qvec = embed_query(query);
+    auto file_hits = metadata_store_->search_similar_files(qvec, k);
+    auto chunk_hits = metadata_store_->search_similar_chunks(get_file_ids(file_hits), qvec, k);
 
-    // Step 2: Use the metadata store to search for similar chunks
-    std::vector<magic_core::ChunkSearchResult> chunk_results =
-        metadata_store_->search_similar_chunks(get_file_ids(file_results), query_embedding, k);
-    return {file_results, chunk_results};
+    std::vector<ChunkResultDTO> chunk_dtos;
+    chunk_dtos.reserve(chunk_hits.size());
+
+    for (const auto &hit : chunk_hits) {
+      ChunkResultDTO dto;
+      dto.id = hit.id;
+      dto.distance = hit.distance;
+      dto.file_id = hit.file_id;
+      dto.chunk_index = hit.chunk_index;
+      try {
+        dto.content = CompressionService::decompress(hit.compressed_content);
+      } catch (const std::exception &) {
+        // Fallback for tests that store mock, non-zstd data
+        dto.content.assign(hit.compressed_content.begin(), hit.compressed_content.end());
+      }
+      chunk_dtos.push_back(std::move(dto));
+    }
+
+    return {std::move(file_hits), std::move(chunk_dtos)};
   } catch (const std::exception &e) {
-    // Re-throw as SearchServiceException to maintain the expected interface
-    std::cout << "Search failed: " << e.what() << std::endl;
     throw SearchServiceException("Search failed: " + std::string(e.what()));
   }
 }

@@ -101,22 +101,23 @@ inline std::vector<Chunk> create_test_chunks(
   return chunks;
 }
 
-// Create a test ChunkWithEmbedding object
-inline magic_core::ChunkWithEmbedding create_test_chunk_with_embedding(
+// Create a test Chunk with embedding
+inline Chunk create_test_chunk_with_embedding(
     const std::string& content = "This is test chunk content.",
     int chunk_index = 0,
     float embedding_base_value = 0.1f) {
-  magic_core::ChunkWithEmbedding chunk_with_embedding;
-  chunk_with_embedding.chunk = create_test_chunk(content, chunk_index);
-  chunk_with_embedding.embedding = create_test_embedding(embedding_base_value);
-  return chunk_with_embedding;
+  Chunk chunk;
+  chunk.content = content;
+  chunk.chunk_index = chunk_index;
+  chunk.vector_embedding = create_test_embedding(embedding_base_value);
+  return chunk;
 }
 
 // Create multiple test chunks with embeddings
-inline std::vector<magic_core::ChunkWithEmbedding> create_test_chunks_with_embeddings(
+inline std::vector<Chunk> create_test_chunks_with_embeddings(
     int count = 3,
     const std::string& base_content = "Test chunk content") {
-  std::vector<magic_core::ChunkWithEmbedding> chunks;
+  std::vector<Chunk> chunks;
   chunks.reserve(count);
   
   for (int i = 0; i < count; ++i) {

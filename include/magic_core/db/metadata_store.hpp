@@ -1,4 +1,6 @@
 #pragma once
+#define SQLITE_HAS_CODEC 1
+#define SQLCIPHER_CRYPTO_OPENSSL 1
 
 #include <faiss/Index.h>
 #include <faiss/IndexFlat.h>
@@ -6,13 +8,14 @@
 #include <faiss/IndexIDMap.h>
 // Why is this file named with a different convention
 #include <faiss/index_io.h>
-#include <sqlite3.h>
-
+#include <sqlcipher/sqlite3.h>
+#include <sqlite_modern_cpp.h>
 #include <chrono>
 #include <filesystem>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "magic_core/types/chunk.hpp"
 #include "magic_core/types/file.hpp"
@@ -43,7 +46,7 @@ struct ChunkMetadata {
   std::vector<float> vector_embedding;
   int file_id;
   int chunk_index;
-  std::string content;
+  std::vector<char> content;
 };
 struct SearchResult {
   int id;
@@ -57,12 +60,12 @@ struct FileSearchResult : public SearchResult {
 struct ChunkSearchResult : public SearchResult {
   int file_id;
   int chunk_index;
-  std::string content;
+  std::vector<char> compressed_content;
 };
 
-struct ChunkWithEmbedding {
+struct ProcessedChunk {
   Chunk chunk;
-  std::vector<float> embedding;
+  std::vector<char> compressed_content;
 };
 
 enum class ProcessingStatus { IDLE, PROCESSING, FAILED };
@@ -104,8 +107,7 @@ class MetadataStoreError : public std::exception {
 class MetadataStore {
  public:
   static constexpr int VECTOR_DIMENSION = 1024;
-
-  explicit MetadataStore(const std::filesystem::path &db_path);
+  explicit MetadataStore(const std::filesystem::path& db_path, const std::string& db_key);
   ~MetadataStore();
 
   // Disable copy constructor and assignment
@@ -119,9 +121,6 @@ class MetadataStore {
   // Initialize the database and build the Faiss index
   void initialize();
 
-  // Add or update file metadata (now including vector embedding)
-  void upsert_file_metadata(const FileMetadata &metadata);
-
   int upsert_file_stub(const BasicFileMetadata &basic_metadata);
 
   void update_file_ai_analysis(int file_id,
@@ -130,7 +129,7 @@ class MetadataStore {
                                const std::string &suggested_filename = "",
                                ProcessingStatus processing_status = ProcessingStatus::IDLE);
 
-  void upsert_chunk_metadata(int file_id, const std::vector<ChunkWithEmbedding> &chunks);
+  void upsert_chunk_metadata(int file_id, const std::vector<ProcessedChunk> &chunks);
 
   std::vector<ChunkMetadata> get_chunk_metadata(std::vector<int> file_ids);
 
@@ -158,8 +157,8 @@ class MetadataStore {
 
  private:
   std::filesystem::path db_path_;
-  sqlite3 *db_;
-
+  std::unique_ptr<sqlite::database> db_;
+    
   // In-memory Faiss index
   faiss::IndexIDMap *faiss_index_;
 
@@ -173,7 +172,6 @@ class MetadataStore {
   void search_faiss_index(faiss::IndexIDMap *index, const std::vector<float> &query_vector, int k, std::vector<float> &results, std::vector<faiss::idx_t> &labels);
 
   void create_tables();
-  void execute_sql(const std::string &sql);
   std::chrono::system_clock::time_point get_file_last_modified(
       const std::filesystem::path &file_path);
   // Time point conversions

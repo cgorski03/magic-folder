@@ -1,112 +1,151 @@
-# Tests configuration
+# Magic Folder Test Suite
+# Organized test structure with modular CMake configuration
 cmake_minimum_required(VERSION 3.20)
 
-# Find Google Test
+# Find required packages
 find_package(GTest CONFIG REQUIRED)
-
-# Define all test source files
-set(TEST_SOURCES
-    test_main.cpp
-    test_utilities.cpp
-    db/test_file_info_service.cpp
-    db/test_file_delete_service.cpp
-    db/test_metadata_store.cpp
-    extractors/test_content_extractor.cpp
-    extractors/test_markdown_extractor.cpp
-    extractors/test_plaintext_extractor.cpp
-    extractors/test_content_extractor_factory.cpp
-    test_file_processing_service.cpp
-    test_search_service.cpp
-)
-
-# Create single test executable for all tests
-add_executable(magic_folder_tests ${TEST_SOURCES})
-
-# Find utf8cpp for tests
 find_package(utf8cpp CONFIG REQUIRED)
 
-# Link against required libraries
-target_link_libraries(magic_folder_tests 
+# Include subdirectories in dependency order
+add_subdirectory(common)        # Common test utilities (must be first)
+add_subdirectory(unit)          # Unit tests
+add_subdirectory(integration)   # Integration tests (future)
+
+# Collect all test sources for the main executable
+set(ALL_TEST_SOURCES
+    test_main.cpp
+    # Unit test sources
+    unit/services/compression_service_test.cpp
+    unit/services/file_processing_service_test.cpp
+    unit/services/search_service_test.cpp
+    unit/extractors/content_extractor_test.cpp
+    unit/extractors/markdown_extractor_test.cpp
+    unit/extractors/plaintext_extractor_test.cpp
+    unit/extractors/content_extractor_factory_test.cpp
+    unit/db/metadata_store_test.cpp
+    unit/db/file_info_service_test.cpp
+    unit/db/file_delete_service_test.cpp
+)
+
+# Create the main test executable
+add_executable(magic_folder_tests ${ALL_TEST_SOURCES})
+
+# Link against all required libraries
+target_link_libraries(magic_folder_tests
     PRIVATE
-    magic_core
-    GTest::gtest 
-    GTest::gtest_main
-    GTest::gmock
-    utf8cpp::utf8cpp
+        magic_test_common
+        magic_core
+        GTest::gtest
+        GTest::gtest_main
+        GTest::gmock
+        utf8cpp::utf8cpp
 )
 
 # Set include directories
-target_include_directories(magic_folder_tests 
-    PRIVATE 
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}  # For test_utilities.hpp
+target_include_directories(magic_folder_tests
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/tests/common  # For utilities_test.hpp, mocks_test.hpp
 )
 
-# Add test to CTest
+# Set C++ standard
+target_compile_features(magic_folder_tests PUBLIC cxx_std_20)
+
+# Register with CTest
+enable_testing()
 add_test(NAME MagicFolderAllTests COMMAND magic_folder_tests)
 
-# Enable testing features
+# Enable Google Test discovery
 include(GoogleTest)
 gtest_discover_tests(magic_folder_tests)
 
-# Optional: Create convenience targets for running specific test suites
-add_custom_target(test_file_info_service
-    COMMAND magic_folder_tests --gtest_filter="FileInfoServiceTest.*"
+# =============================================================================
+# HIGH-LEVEL TEST TARGETS
+# =============================================================================
+
+# Run all tests
+add_custom_target(test_all
+    COMMAND $<TARGET_FILE:magic_folder_tests>
     DEPENDS magic_folder_tests
-    COMMENT "Running FileInfoService tests only"
+    COMMENT "Running all tests"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
-add_custom_target(test_file_delete_service
-    COMMAND magic_folder_tests --gtest_filter="FileDeleteServiceTest.*"
+# Run only unit tests
+add_custom_target(test_unit_all
+    COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="-*Integration*"
     DEPENDS magic_folder_tests
-    COMMENT "Running FileDeleteService tests only"
+    COMMENT "Running all unit tests"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
-add_custom_target(test_metadata_store
-    COMMAND magic_folder_tests --gtest_filter="MetadataStoreTest.*"
+# Run tests by layer
+add_custom_target(test_services_all
+    COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="*ServiceTest*"
     DEPENDS magic_folder_tests
-    COMMENT "Running MetadataStore tests only"
+    COMMENT "Running all service layer tests"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
-add_custom_target(test_extractors
-    COMMAND magic_folder_tests --gtest_filter="*ExtractorTest*"
+add_custom_target(test_extractors_all
+    COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="*ExtractorTest*"
     DEPENDS magic_folder_tests
     COMMENT "Running all extractor tests"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
-add_custom_target(test_content_extractor
-    COMMAND magic_folder_tests --gtest_filter="ContentExtractorTest.*"
+add_custom_target(test_db_all
+    COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="*StoreTest*:*InfoServiceTest*:*DeleteServiceTest*"
     DEPENDS magic_folder_tests
-    COMMENT "Running ContentExtractor tests only"
+    COMMENT "Running all database layer tests"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
-add_custom_target(test_markdown_extractor
-    COMMAND magic_folder_tests --gtest_filter="MarkdownExtractorTest.*"
-    DEPENDS magic_folder_tests
-    COMMENT "Running MarkdownExtractor tests only"
-)
+# =============================================================================
+# INDIVIDUAL TEST TARGETS (for quick development iteration)
+# =============================================================================
+# Note: Individual test targets are defined in their respective subdirectories:
+# - Service tests: unit/services/CMakeLists.txt
+# - Extractor tests: unit/extractors/CMakeLists.txt  
+# - Database tests: unit/db/CMakeLists.txt
 
-add_custom_target(test_plaintext_extractor
-    COMMAND magic_folder_tests --gtest_filter="PlainTextExtractorTest.*"
-    DEPENDS magic_folder_tests
-    COMMENT "Running PlainTextExtractor tests only"
-)
+# =============================================================================
+# UTILITY TARGETS
+# =============================================================================
 
-add_custom_target(test_content_extractor_factory
-    COMMAND magic_folder_tests --gtest_filter="ContentExtractorFactoryTest.*"
-    DEPENDS magic_folder_tests
-    COMMENT "Running ContentExtractorFactory tests only"
-)
-
-add_custom_target(test_file_processing_service
-    COMMAND magic_folder_tests --gtest_filter="FileProcessingServiceTest.*"
-    DEPENDS magic_folder_tests
-    COMMENT "Running FileProcessingService tests only"
-)
-
-# Add convenience target for search service tests
-add_custom_target(test_search_service
-    COMMAND magic_folder_tests --gtest_filter="SearchServiceTest.*"
-    DEPENDS magic_folder_tests
-    COMMENT "Running SearchService tests only"
+# Show available test targets
+add_custom_target(test_help
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "Available test targets:"
+    COMMAND ${CMAKE_COMMAND} -E echo "======================="
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "High-level targets:"
+    COMMAND ${CMAKE_COMMAND} -E echo "  test_all           - Run all tests"
+    COMMAND ${CMAKE_COMMAND} -E echo "  test_unit_all      - Run all unit tests"
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "Layer targets:"
+    COMMAND ${CMAKE_COMMAND} -E echo "  test_services_all  - Run all service tests"
+    COMMAND ${CMAKE_COMMAND} -E echo "  test_extractors_all- Run all extractor tests"
+    COMMAND ${CMAKE_COMMAND} -E echo "  test_db_all        - Run all database tests"
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "Individual targets defined in subdirectories:"
+    COMMAND ${CMAKE_COMMAND} -E echo "  Service tests:"
+    COMMAND ${CMAKE_COMMAND} -E echo "    test_compression_service      - CompressionService tests"
+    COMMAND ${CMAKE_COMMAND} -E echo "    test_file_processing_service  - FileProcessingService tests"
+    COMMAND ${CMAKE_COMMAND} -E echo "    test_search_service           - SearchService tests"
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "  Extractor tests:"
+    COMMAND ${CMAKE_COMMAND} -E echo "    test_content_extractor         - ContentExtractor tests"
+    COMMAND ${CMAKE_COMMAND} -E echo "    test_markdown_extractor        - MarkdownExtractor tests"
+    COMMAND ${CMAKE_COMMAND} -E echo "    test_plaintext_extractor       - PlainTextExtractor tests"
+    COMMAND ${CMAKE_COMMAND} -E echo "    test_content_extractor_factory - ContentExtractorFactory tests"
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "  Database tests:"
+    COMMAND ${CMAKE_COMMAND} -E echo "    test_metadata_store     - MetadataStore tests"
+    COMMAND ${CMAKE_COMMAND} -E echo "    test_file_info_service  - FileInfoService tests"
+    COMMAND ${CMAKE_COMMAND} -E echo "    test_file_delete_service- FileDeleteService tests"
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "Usage: make target_name"
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMENT "Showing available test targets"
 )

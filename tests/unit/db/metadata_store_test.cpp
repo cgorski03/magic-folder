@@ -2,9 +2,8 @@
 #include <memory>
 #include <optional>
 #include <vector>
-
 #include "magic_core/db/metadata_store.hpp"
-#include "test_utilities.hpp"
+#include "../../common/utilities_test.hpp"
 
 namespace magic_core {
 
@@ -12,6 +11,26 @@ class MetadataStoreTest : public magic_tests::MetadataStoreTestBase {
  protected:
   void SetUp() override {
     MetadataStoreTestBase::SetUp();
+  }
+
+  // Helper function to convert Chunk to ProcessedChunk with mock compressed content
+  magic_core::ProcessedChunk chunk_to_processed_chunk(const Chunk& chunk) {
+    magic_core::ProcessedChunk processed_chunk;
+    processed_chunk.chunk = chunk;
+    // Use mock compressed content for testing
+    std::string mock_compressed = "compressed_" + chunk.content;
+    processed_chunk.compressed_content = std::vector<char>(mock_compressed.begin(), mock_compressed.end());
+    return processed_chunk;
+  }
+
+  // Helper function to convert vector of Chunks to ProcessedChunks
+  std::vector<magic_core::ProcessedChunk> chunks_to_processed_chunks(const std::vector<Chunk>& chunks) {
+    std::vector<magic_core::ProcessedChunk> processed_chunks;
+    processed_chunks.reserve(chunks.size());
+    for (const auto& chunk : chunks) {
+      processed_chunks.push_back(chunk_to_processed_chunk(chunk));
+    }
+    return processed_chunks;
   }
 };
 
@@ -56,7 +75,7 @@ TEST_F(MetadataStoreTest, CreateFileStub_WithAllFields) {
   EXPECT_EQ(retrieved->processing_status, "IDLE");
 }
 
-TEST_F(MetadataStoreTest, CreateFileStub_DuplicatePathThrows) {
+TEST_F(MetadataStoreTest, CreateFileStub_DuplicatePathUpdates) {
   // Arrange
   auto metadata1 =
       magic_tests::TestUtilities::create_test_basic_file_metadata("/test/duplicate.txt", "hash1");
@@ -75,6 +94,39 @@ TEST_F(MetadataStoreTest, CreateFileStub_DuplicatePathThrows) {
   auto retrieved = metadata_store_->get_file_metadata(file_id2);
   ASSERT_TRUE(retrieved.has_value());
   EXPECT_EQ(retrieved->file_hash, "hash2");
+}
+
+TEST_F(MetadataStoreTest, CreateFileStub_UpdateResetsAIFields) {
+  // Arrange - Create a file stub first
+  auto initial_metadata =
+      magic_tests::TestUtilities::create_test_basic_file_metadata("/test/reset_ai.txt", "hash1");
+  int file_id = metadata_store_->upsert_file_stub(initial_metadata);
+
+  // Add AI analysis to the file
+  auto test_vector = magic_tests::TestUtilities::create_test_vector("ai_analysis", 1024);
+  metadata_store_->update_file_ai_analysis(file_id, test_vector, "old_category", "old_filename.txt");
+
+  // Verify AI fields are set
+  auto with_ai = metadata_store_->get_file_metadata(file_id);
+  ASSERT_TRUE(with_ai.has_value());
+  EXPECT_EQ(with_ai->summary_vector_embedding.size(), 1024);
+  EXPECT_EQ(with_ai->suggested_category, "old_category");
+  EXPECT_EQ(with_ai->suggested_filename, "old_filename.txt");
+
+  // Act - Update the file stub with new hash (simulating file content change)
+  auto updated_metadata =
+      magic_tests::TestUtilities::create_test_basic_file_metadata("/test/reset_ai.txt", "hash2");
+  int updated_file_id = metadata_store_->upsert_file_stub(updated_metadata);
+
+  // Assert - Should be same file ID but AI fields should be reset
+  EXPECT_EQ(file_id, updated_file_id);
+  
+  auto after_update = metadata_store_->get_file_metadata(file_id);
+  ASSERT_TRUE(after_update.has_value());
+  EXPECT_EQ(after_update->file_hash, "hash2");  // Basic metadata updated
+  EXPECT_TRUE(after_update->summary_vector_embedding.empty());  // AI vector reset
+  EXPECT_TRUE(after_update->suggested_category.empty());  // AI category reset
+  EXPECT_TRUE(after_update->suggested_filename.empty());  // AI filename reset
 }
 
 // Tests for update_file_ai_analysis
@@ -153,7 +205,7 @@ TEST_F(MetadataStoreTest, UpsertChunkMetadata_BasicFunctionality) {
   auto chunks = magic_tests::TestUtilities::create_test_chunks(3, "test content");
 
   // Act
-  metadata_store_->upsert_chunk_metadata(file_id, chunks);
+  metadata_store_->upsert_chunk_metadata(file_id, chunks_to_processed_chunks(chunks));
 
   // Assert - verify chunks were stored (we'll need a way to retrieve them)
   // For now, just verify no exception was thrown
@@ -166,7 +218,7 @@ TEST_F(MetadataStoreTest, UpsertChunkMetadata_EmptyChunks) {
       "/test/no_chunks.txt", "no_chunk_hash");
   int file_id = metadata_store_->upsert_file_stub(basic_metadata);
 
-  std::vector<ChunkWithEmbedding> empty_chunks;
+  std::vector<magic_core::ProcessedChunk> empty_chunks;
 
   // Act & Assert - should not throw
   EXPECT_NO_THROW(metadata_store_->upsert_chunk_metadata(file_id, empty_chunks));
@@ -182,8 +234,8 @@ TEST_F(MetadataStoreTest, UpsertChunkMetadata_ReplaceExistingChunks) {
   auto updated_chunks = magic_tests::TestUtilities::create_test_chunks(3, "updated content");
 
   // Act
-  metadata_store_->upsert_chunk_metadata(file_id, initial_chunks);
-  metadata_store_->upsert_chunk_metadata(file_id, updated_chunks);  // Should replace
+  metadata_store_->upsert_chunk_metadata(file_id, chunks_to_processed_chunks(initial_chunks));
+  metadata_store_->upsert_chunk_metadata(file_id, chunks_to_processed_chunks(updated_chunks));
 
   // Assert - no exception thrown indicates success
   SUCCEED();
@@ -416,7 +468,7 @@ TEST_F(MetadataStoreTest, CompleteWorkflow_FileStubToSearchable) {
 
   // 3. Add chunks
   auto chunks = magic_tests::TestUtilities::create_test_chunks(2, "workflow content");
-  metadata_store_->upsert_chunk_metadata(file_id, chunks);
+  metadata_store_->upsert_chunk_metadata(file_id, chunks_to_processed_chunks(chunks));
 
   // Add this line to rebuild the Faiss index with the new vector
   metadata_store_->rebuild_faiss_index();
@@ -471,7 +523,7 @@ TEST_F(MetadataStoreTest, SearchSimilarChunks_ValidFileIds) {
     EXPECT_GE(chunk_result.distance, 0.0f);
     EXPECT_GT(chunk_result.file_id, 0);
     EXPECT_GE(chunk_result.chunk_index, 0);
-    EXPECT_FALSE(chunk_result.content.empty());
+    EXPECT_FALSE(chunk_result.compressed_content.empty());
     
     // Verify file_id is one of the expected ones
     EXPECT_TRUE(chunk_result.file_id == file1_id || chunk_result.file_id == file2_id);
@@ -595,7 +647,7 @@ TEST_F(MetadataStoreTest, FillChunkMetadata_ValidChunks) {
     // Initialize other fields to ensure they get filled
     result.file_id = 0;
     result.chunk_index = 0;
-    result.content = "";
+    result.compressed_content = {};
     chunk_results.push_back(result);
   }
 
@@ -607,7 +659,7 @@ TEST_F(MetadataStoreTest, FillChunkMetadata_ValidChunks) {
     EXPECT_GT(chunk_result.id, 0);
     EXPECT_GT(chunk_result.file_id, 0);
     EXPECT_GE(chunk_result.chunk_index, 0);
-    EXPECT_FALSE(chunk_result.content.empty());
+    EXPECT_FALSE(chunk_result.compressed_content.empty());
     EXPECT_EQ(chunk_result.distance, 0.1f);  // Distance should be preserved
   }
 }
@@ -634,7 +686,7 @@ TEST_F(MetadataStoreTest, FillChunkMetadata_NonExistentChunkIds) {
   result.distance = 0.1f;
   result.file_id = 0;
   result.chunk_index = 0;
-  result.content = "";
+  result.compressed_content = {};
   chunk_results.push_back(result);
 
   // Act
@@ -687,7 +739,7 @@ TEST_F(MetadataStoreTest, SearchSimilarChunks_MixedFileTypes) {
     EXPECT_GT(chunk_result.id, 0);
     EXPECT_GE(chunk_result.distance, 0.0f);
     EXPECT_GE(chunk_result.chunk_index, 0);
-    EXPECT_FALSE(chunk_result.content.empty());
+    EXPECT_FALSE(chunk_result.compressed_content.empty());
   }
   
   // Should find chunks from multiple files
@@ -722,7 +774,7 @@ TEST_F(MetadataStoreTest, SearchSimilarChunks_EdgeCaseQueryVector) {
     EXPECT_GE(chunk_result.distance, 0.0f);
     EXPECT_GT(chunk_result.file_id, 0);
     EXPECT_GE(chunk_result.chunk_index, 0);
-    EXPECT_FALSE(chunk_result.content.empty());
+    EXPECT_FALSE(chunk_result.compressed_content.empty());
   }
 }
 
@@ -753,7 +805,7 @@ TEST_F(MetadataStoreTest, SearchSimilarChunks_SingleFile) {
     EXPECT_GT(chunk_result.id, 0);
     EXPECT_GE(chunk_result.distance, 0.0f);
     EXPECT_GE(chunk_result.chunk_index, 0);
-    EXPECT_FALSE(chunk_result.content.empty());
+    EXPECT_FALSE(chunk_result.compressed_content.empty());
   }
 }
 
@@ -764,7 +816,7 @@ TEST_F(MetadataStoreTest, SearchSimilarChunks_PreservesChunkMetadata) {
   file1.summary_vector_embedding = magic_tests::TestUtilities::create_test_vector("file1", 1024);
   
   // Create chunks with specific content
-  std::vector<magic_core::ChunkWithEmbedding> chunks;
+  std::vector<Chunk> chunks;
   chunks.push_back(magic_tests::TestUtilities::create_test_chunk_with_embedding("first chunk content", 0, "chunk1"));
   chunks.push_back(magic_tests::TestUtilities::create_test_chunk_with_embedding("second chunk content", 1, "chunk2"));
   chunks.push_back(magic_tests::TestUtilities::create_test_chunk_with_embedding("third chunk content", 2, "chunk3"));
@@ -783,7 +835,7 @@ TEST_F(MetadataStoreTest, SearchSimilarChunks_PreservesChunkMetadata) {
   ASSERT_FALSE(results.empty());
   
   // Verify that chunk content and indices are preserved
-  std::set<std::string> expected_contents = {"first chunk content", "second chunk content", "third chunk content"};
+  std::set<std::string> expected_contents = {"compressed_first chunk content", "compressed_second chunk content", "compressed_third chunk content"};
   std::set<int> expected_indices = {0, 1, 2};
   
   std::set<std::string> found_contents;
@@ -791,7 +843,9 @@ TEST_F(MetadataStoreTest, SearchSimilarChunks_PreservesChunkMetadata) {
   
   for (const auto& chunk_result : results) {
     EXPECT_EQ(chunk_result.file_id, file1_id);
-    found_contents.insert(chunk_result.content);
+    // Convert vector<char> to string for comparison (mock compressed content)
+    std::string content_str(chunk_result.compressed_content.begin(), chunk_result.compressed_content.end());
+    found_contents.insert(content_str);
     found_indices.insert(chunk_result.chunk_index);
   }
   
@@ -801,3 +855,38 @@ TEST_F(MetadataStoreTest, SearchSimilarChunks_PreservesChunkMetadata) {
 }
 
 }  // namespace magic_core
+
+// ===== Encryption tests =====
+namespace magic_core {
+
+// Verifies that opening the same database file with a wrong key fails
+TEST_F(MetadataStoreTest, OpenWithWrongKey_Throws) {
+  // Arrange: ensure DB is initialized by performing a simple write
+  auto basic_metadata = magic_tests::TestUtilities::create_test_basic_file_metadata(
+      "/test/encrypted.txt", "hash123", FileType::Text, 128, "IDLE");
+  EXPECT_NO_THROW({ metadata_store_->upsert_file_stub(basic_metadata); });
+
+  // Act + Assert: using an incorrect key must throw
+  const std::string wrong_key(32, 'W');
+  EXPECT_THROW({
+    // Create a fresh instance against the same path but wrong key
+    magic_core::MetadataStore wrong_store(temp_db_path_, wrong_key);
+    (void)wrong_store; // silence unused var warning
+  }, magic_core::MetadataStoreError);
+}
+
+// Verifies that reopening with the correct key succeeds
+TEST_F(MetadataStoreTest, OpenWithCorrectKey_Succeeds) {
+  // Arrange: the fixture already created the DB with the test key
+
+  // Use the same deterministic key as in the fixture
+  const std::string correct_key(32, 'K');
+
+  // Act & Assert: constructing another instance with the same key should not throw
+  EXPECT_NO_THROW({
+    magic_core::MetadataStore store_again(temp_db_path_, correct_key);
+    (void)store_again;
+  });
+}
+
+} // namespace magic_core

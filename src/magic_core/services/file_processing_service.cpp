@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include "magic_core/db/metadata_store.hpp"
+#include "magic_core/services/compression_service.hpp"
 
 namespace magic_core {
 
@@ -39,40 +40,38 @@ magic_core::ProcessFileResult FileProcessingService::process_file(
   basic_file_metadata.file_hash = extraction_result.content_hash;
 
   int file_id = metadata_store_->upsert_file_stub(basic_file_metadata);
-  std::cout << "File ID: " << file_id << std::endl;
   // Use chunks from same read (no additional file I/O)
-  std::vector<magic_core::ChunkWithEmbedding> chunks_with_embedding = {};
+  std::vector<magic_core::ProcessedChunk> processed_chunks = {};
 
   // init document embedding accumulator
   std::vector<float> document_embedding(MetadataStore::VECTOR_DIMENSION, 0.0f);
   int total_chunks_processed = 0;
   try {
     // This will be made more efficient with thread pool in future
-    for (const auto& chunk : extraction_result.chunks) {
-      std::vector<float> embedding = ollama_client_->get_embedding(chunk.content);
-      
-      // Handle empty embedding vectors
-      if (embedding.empty()) {
+    for (auto& chunk : extraction_result.chunks) {
+      chunk.vector_embedding = ollama_client_->get_embedding(chunk.content);
+
+      if (chunk.vector_embedding.empty()) {
         throw std::runtime_error("Received empty embedding vector for chunk: " + chunk.content);
       }
       
-      chunks_with_embedding.push_back({chunk, embedding});
+      processed_chunks.push_back({chunk, CompressionService::compress(chunk.content)});
 
       // Accumulate for document-level embedding (running sum)
       for (size_t i = 0; i < MetadataStore::VECTOR_DIMENSION; ++i) {
-        document_embedding[i] += embedding[i];
+        document_embedding[i] += chunk.vector_embedding[i];
       }
       total_chunks_processed++;
 
       // check here if the length of this vector is the batch size
-      if (chunks_with_embedding.size() == 64) {
+      if (processed_chunks.size() == 64) {
         // do batches of 64 to not use too much memory
-        metadata_store_->upsert_chunk_metadata(file_id, chunks_with_embedding);
-        chunks_with_embedding.clear();
+        metadata_store_->upsert_chunk_metadata(file_id, processed_chunks);
+        processed_chunks.clear();
       }
     }
     // Get whatever was left in the vector
-    metadata_store_->upsert_chunk_metadata(file_id, chunks_with_embedding);
+    metadata_store_->upsert_chunk_metadata(file_id, processed_chunks);
 
     if (total_chunks_processed > 0) {
       // normalize for better similarity matching
@@ -98,7 +97,6 @@ magic_core::ProcessFileResult FileProcessingService::process_file(
     }
   } catch (const std::exception& e) {
     // Update the metadata store to reflect the failure
-    std::cout << "Error processing file: " << e.what() << std::endl;
     metadata_store_->update_file_ai_analysis(file_id, {}, "", "", ProcessingStatus::FAILED);
     return ProcessFileResult::failure_response(e.what());
 

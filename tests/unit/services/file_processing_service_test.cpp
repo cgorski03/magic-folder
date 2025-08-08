@@ -7,12 +7,10 @@
 #include <vector>
 
 #include "magic_core/services/file_processing_service.hpp"
-#include "test_mocks.hpp"
-#include "test_utilities.hpp"
+#include "../../common/mocks_test.hpp"
+#include "../../common/utilities_test.hpp"
 
-using ::testing::_;
 using ::testing::Return;
-using ::testing::InSequence;
 using ::testing::StrictMock;
 
 namespace magic_core {

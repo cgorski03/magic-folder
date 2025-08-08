@@ -111,7 +111,7 @@ crow::response Routes::handle_search(const crow::request &req) {
     std::cout << "File results: " << file_results.size() << std::endl;
     // Add chunk results
     nlohmann::json chunk_results = nlohmann::json::array();
-    for (const magic_core::ChunkSearchResult &result : search_results.chunk_results) {
+    for (const magic_core::SearchService::ChunkResultDTO &result : search_results.chunk_results) {
       nlohmann::json result_json;
       result_json["id"] = result.id;
       result_json["file_id"] = result.file_id;

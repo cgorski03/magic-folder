@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "magic_core/extractors/content_extractor.hpp"
-#include "test_utilities.hpp"
+#include "../../common/utilities_test.hpp"
 #include <utf8.h>
 
 namespace magic_core {

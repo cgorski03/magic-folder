@@ -45,5 +45,4 @@ class FileProcessingService {
   std::shared_ptr<magic_core::ContentExtractorFactory> content_extractor_factory_;
   std::shared_ptr<magic_core::OllamaClient> ollama_client_;
 };
-
 }
