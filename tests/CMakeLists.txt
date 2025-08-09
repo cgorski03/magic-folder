@@ -16,6 +16,7 @@ set(ALL_TEST_SOURCES
     test_main.cpp
     # Unit test sources
     unit/core/worker_test.cpp
+    unit/core/worker_pool_test.cpp
     unit/services/compression_service_test.cpp
     unit/services/file_processing_service_test.cpp
     unit/services/search_service_test.cpp

@@ -176,6 +176,20 @@ For more detailed test output:
 ./bin/magic_folder_tests --gtest_output=verbose
 ```
 
+### Core Worker/WorkerPool Tests
+
+Run both worker and worker-pool tests:
+
+```bash
+./bin/magic_folder_tests --gtest_filter="*WorkerTest*:*WorkerPoolTest*"
+```
+
+Run only worker-pool tests:
+
+```bash
+./bin/magic_folder_tests --gtest_filter="WorkerPoolTest.*"
+```
+
 ### Debug Build
 
 Tests are built in Debug mode by default for better debugging:

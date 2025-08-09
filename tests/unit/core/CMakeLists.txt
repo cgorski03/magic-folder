@@ -3,6 +3,7 @@
 
 set(CORE_TEST_SOURCES
     worker_test.cpp
+    worker_pool_test.cpp
 )
 
 # Create core tests library
@@ -29,7 +30,7 @@ target_compile_features(magic_test_core PUBLIC cxx_std_20)
 
 # Define test targets for core functionality
 add_custom_target(test_core
-    COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="*WorkerTest*"
+    COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="*WorkerTest*:*WorkerPoolTest*"
     DEPENDS magic_folder_tests
     COMMENT "Running all core tests"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
