@@ -3,7 +3,6 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -13,6 +12,7 @@ class Config {
   std::string metadata_db_path;
   std::string ollama_url;
   std::string embedding_model;
+  int num_workers;
   static Config from_environment() {
     Config config;
 
@@ -23,7 +23,7 @@ class Config {
     config.metadata_db_path = get_env_or_default("METADATA_DB_PATH", "./data/metadata.db");
     config.ollama_url = get_env_or_default("OLLAMA_URL", "http://localhost:11434");
     config.embedding_model = get_env_or_default("EMBEDDING_MODEL", "mxbai-embed-large");
-
+    config.num_workers = std::stoi(get_env_or_default("NUM_WORKERS", "1"));
     config.validate();
     return config;
   }

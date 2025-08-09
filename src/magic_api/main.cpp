@@ -12,6 +12,8 @@
 #include "magic_core/services/file_processing_service.hpp"
 #include "magic_core/services/search_service.hpp"
 #include "magic_core/services/encryption_key_service.hpp"
+#include "magic_core/extractors/content_extractor_factory.hpp"
+#include "magic_core/async/worker_pool.hpp"
 
 int main() {
   try {
@@ -43,6 +45,13 @@ int main() {
     auto search_service =
         std::make_shared<magic_core::SearchService>(metadata_store, ollama_client);
 
+    auto worker_pool = std::make_shared<magic_core::async::WorkerPool>(
+        config.num_workers,
+        *metadata_store,
+        *ollama_client,
+        *content_extractor_factory);
+
+    worker_pool->start();
     // Parse server URL
     size_t colon_pos = server_url.find(':');
     if (colon_pos == std::string::npos) {

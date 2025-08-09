@@ -57,12 +57,12 @@ TEST_F(FileInfoServiceTest, ListFiles_ReturnsAllFiles) {
             [](const auto& a, const auto& b) { return a.path < b.path; });
 
   EXPECT_EQ(result[0].path, "/test/file1.txt");
-  EXPECT_EQ(result[0].file_hash, "abc123");
+  EXPECT_EQ(result[0].content_hash, "abc123");
   EXPECT_EQ(result[0].file_type, magic_core::FileType::Text);
   EXPECT_EQ(result[0].file_size, 1024);
 
   EXPECT_EQ(result[1].path, "/test/file2.md");
-  EXPECT_EQ(result[1].file_hash, "def456");
+  EXPECT_EQ(result[1].content_hash, "def456");
   EXPECT_EQ(result[1].file_type, magic_core::FileType::Markdown);
   EXPECT_EQ(result[1].file_size, 2048);
 }
@@ -115,7 +115,7 @@ TEST_F(FileInfoServiceTest, GetFileInfo_ReturnsFileWhenExists) {
   // Assert
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->path, "/test/file1.txt");
-  EXPECT_EQ(result->file_hash, "abc123");
+  EXPECT_EQ(result->content_hash, "abc123");
   EXPECT_EQ(result->file_type, magic_core::FileType::Text);
   EXPECT_EQ(result->file_size, 1024);
 }
@@ -146,7 +146,7 @@ TEST_F(FileInfoServiceTest, GetFileInfo_HandlesRelativePaths) {
   // Assert
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->path, "relative/path/file.txt");
-  EXPECT_EQ(result->file_hash, "rel123");
+  EXPECT_EQ(result->content_hash, "rel123");
 }
 
 TEST_F(FileInfoServiceTest, GetFileInfo_PreservesTimestamps) {
@@ -208,7 +208,7 @@ TEST_F(FileInfoServiceTest, ServiceProperlyDelegatesToMetadataStore) {
   ASSERT_TRUE(service_file.has_value());
   ASSERT_TRUE(store_file.has_value());
   EXPECT_EQ(service_file->path, store_file->path);
-  EXPECT_EQ(service_file->file_hash, store_file->file_hash);
+  EXPECT_EQ(service_file->content_hash, store_file->content_hash);
 }
 
 // Test with larger datasets to ensure performance is reasonable
@@ -261,7 +261,7 @@ TEST_F(FileInfoServiceTest, GetFileInfo_ReflectsUpdates) {
 
   // Assert
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result->file_hash, "updated_hash");
+  EXPECT_EQ(result->content_hash, "updated_hash");
   EXPECT_EQ(result->file_size, 2048);
 }
 

@@ -22,19 +22,98 @@
 
 namespace magic_core {
 
+
+enum class TaskStatus { PENDING, PROCESSING, COMPLETED, FAILED };
+
+  struct Task {
+    long long id = 0;
+    std::string task_type;
+    std::string file_path;
+    TaskStatus status = TaskStatus::PENDING;
+    int priority = 10;
+    std::string error_message;
+    std::chrono::system_clock::time_point created_at;
+    std::chrono::system_clock::time_point updated_at;
+  };
+
+inline std::string to_string(TaskStatus status) {
+  switch (status) {
+    case TaskStatus::PENDING:
+      return "PENDING";
+    case TaskStatus::PROCESSING:
+      return "PROCESSING";
+    case TaskStatus::COMPLETED:
+      return "COMPLETED";
+    case TaskStatus::FAILED:
+      return "FAILED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+inline TaskStatus task_status_from_string(const std::string &str) {
+  if (str == "PENDING")
+    return TaskStatus::PENDING;
+  if (str == "PROCESSING")
+    return TaskStatus::PROCESSING;
+  if (str == "COMPLETED")
+    return TaskStatus::COMPLETED;
+  if (str == "FAILED")
+    return TaskStatus::FAILED;
+  throw std::invalid_argument("Invalid TaskStatus string: " + str);
+}
+
+enum class ProcessingStatus { QUEUED, PROCESSED, PROCESSING, FAILED };
+inline std::string to_string(ProcessingStatus status) {
+  switch (status) {
+    case ProcessingStatus::PROCESSED:
+      return "PROCESSED";
+    case ProcessingStatus::QUEUED:
+      return "QUEUED";
+    case ProcessingStatus::PROCESSING:
+      return "PROCESSING";
+    case ProcessingStatus::FAILED:
+      return "FAILED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+inline ProcessingStatus processing_status_from_string(const std::string &str) {
+  if (str == "PROCESSED")
+    return ProcessingStatus::PROCESSED;
+  if (str == "QUEUED")
+    return ProcessingStatus::QUEUED;
+  if (str == "PROCESSING")
+    return ProcessingStatus::PROCESSING;
+  if (str == "FAILED")
+    return ProcessingStatus::FAILED;
+  throw std::invalid_argument("Unknown ProcessingStatus: " + str);
+}
+
+class MetadataStoreError : public std::exception {
+ public:
+  explicit MetadataStoreError(const std::string &message) : message_(message) {}
+
+  const char *what() const noexcept override {
+    return message_.c_str();
+  }
+
+ private:
+  std::string message_;
+};
 struct BasicFileMetadata {
   int id = 0;
   std::string path;
   std::string original_path;
-  std::string file_hash;
+  std::string content_hash;
   std::chrono::system_clock::time_point last_modified;
   std::chrono::system_clock::time_point created_at;
   FileType file_type;
   size_t file_size = 0;
-  std::string processing_status = "IDLE";
+  ProcessingStatus processing_status = ProcessingStatus::PROCESSED;
   std::string tags;
 };
-
 struct FileMetadata : public BasicFileMetadata {
   std::vector<float> summary_vector_embedding;
   std::string suggested_category;
@@ -68,42 +147,6 @@ struct ProcessedChunk {
   std::vector<char> compressed_content;
 };
 
-enum class ProcessingStatus { IDLE, PROCESSING, FAILED };
-inline std::string to_string(ProcessingStatus status) {
-  switch (status) {
-    case ProcessingStatus::IDLE:
-      return "IDLE";
-    case ProcessingStatus::PROCESSING:
-      return "PROCESSING";
-    case ProcessingStatus::FAILED:
-      return "FAILED";
-    default:
-      return "UNKNOWN";
-  }
-}
-
-inline ProcessingStatus processing_status_from_string(const std::string &str) {
-  if (str == "IDLE")
-    return ProcessingStatus::IDLE;
-  if (str == "PROCESSING")
-    return ProcessingStatus::PROCESSING;
-  if (str == "FAILED")
-    return ProcessingStatus::FAILED;
-  throw std::invalid_argument("Unknown ProcessingStatus: " + str);
-}
-
-class MetadataStoreError : public std::exception {
- public:
-  explicit MetadataStoreError(const std::string &message) : message_(message) {}
-
-  const char *what() const noexcept override {
-    return message_.c_str();
-  }
-
- private:
-  std::string message_;
-};
-
 class MetadataStore {
  public:
   static constexpr int VECTOR_DIMENSION = 1024;
@@ -127,7 +170,8 @@ class MetadataStore {
                                const std::vector<float> &summary_vector,
                                const std::string &suggested_category = "",
                                const std::string &suggested_filename = "",
-                               ProcessingStatus processing_status = ProcessingStatus::IDLE);
+                               ProcessingStatus processing_status = ProcessingStatus::PROCESSED);
+  void update_file_processing_status(int file_id, ProcessingStatus processing_status);
 
   void upsert_chunk_metadata(int file_id, const std::vector<ProcessedChunk> &chunks);
 
@@ -147,6 +191,7 @@ class MetadataStore {
 
   // Check if file exists
   bool file_exists(const std::string &path);
+  std::optional<ProcessingStatus> file_processing_status(std::string content_hash);
 
   std::vector<FileSearchResult> search_similar_files(const std::vector<float> &query_vector, int k);
   std::vector<ChunkSearchResult> search_similar_chunks(const std::vector<int> &file_ids,
@@ -154,6 +199,16 @@ class MetadataStore {
                                                        int k);
 
   void rebuild_faiss_index();
+
+  // Task queue management
+  long long create_task(const std::string& task_type,
+                        const std::string& file_path,
+                        int priority = 10);
+  std::optional<Task> fetch_and_claim_next_task();
+  void update_task_status(long long task_id, TaskStatus new_status);
+  void mark_task_as_failed(long long task_id, const std::string& error_message);
+  std::vector<Task> get_tasks_by_status(TaskStatus status);
+  void clear_completed_tasks(int older_than_days = 30);
 
  private:
   std::filesystem::path db_path_;

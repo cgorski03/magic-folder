@@ -14,16 +14,20 @@ ExtractionResult MarkdownExtractor::extract_with_hash(const std::filesystem::pat
   std::string content = get_string_content(file_path);
 
   if (content.empty()) {
-    return {"", {}, FileType::Markdown};
+    return {"", {}};
   }
 
-  // Compute hash from loaded content (no additional file read!)
+  // Compute hash from loaded content (no additional file read)
   std::string content_hash = compute_hash_from_content(content);
   
   // Extract chunks from the same loaded content
   std::vector<Chunk> chunks = extract_chunks_from_content(content);
   
-  return {content_hash, chunks, FileType::Markdown};
+  return {content_hash, chunks};
+}
+
+FileType MarkdownExtractor::get_file_type() const {
+  return FileType::Markdown;
 }
 
 // Legacy method - now uses the new architecture

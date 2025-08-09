@@ -20,6 +20,9 @@ std::string ContentExtractor::get_string_content(const fs::path& file_path) cons
   return content;
 }
 
+FileType ContentExtractor::get_file_type() const {
+  return FileType::Unknown;
+}
 // New helper method for computing hash from already-loaded content
 std::string ContentExtractor::compute_hash_from_content(const std::string& content) const {
   EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
@@ -57,7 +60,6 @@ std::string ContentExtractor::compute_hash_from_content(const std::string& conte
   return ss.str();
 }
 
-// Legacy method - now uses the new architecture
 std::string ContentExtractor::get_content_hash(const fs::path& file_path) const {
   std::string content = get_string_content(file_path);
   return compute_hash_from_content(content);

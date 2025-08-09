@@ -271,3 +271,22 @@ sequenceDiagram
     WorkerThread->>PlainTextExtractor: get_chunks("notes.txt")
     PlainTextExtractor-->>WorkerThread: Returns vector<Chunk>
 ```
+```mermaid 
+sequenceDiagram
+    participant FileWatcher
+    participant FileProcessingService
+    participant TaskQueue (DB)
+    participant Worker
+
+    FileWatcher->>FileProcessingService: request_file_processing(path)
+    Note over FileProcessingService: Checks if work is needed
+    FileProcessingService->>TaskQueue: create_task(path)
+    Note over FileWatcher, FileProcessingService: Interaction is now complete and fast.
+
+    loop Background Loop
+        Worker->>TaskQueue: fetch_and_claim_next_task()
+        TaskQueue-->>Worker: Returns task for path
+        Note over Worker: Executes heavy logic<br/>(chunking, embedding, etc.)
+        Worker->>TaskQueue: update_task_status('COMPLETE')
+    end
+```

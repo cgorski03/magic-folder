@@ -8,13 +8,15 @@ bool PlainTextExtractor::can_handle(const std::filesystem::path& file_path) cons
     const std::string extension = file_path.extension().string();
     return extension == ".txt";
 }
-
+FileType PlainTextExtractor::get_file_type() const {
+    return FileType::Text;
+}
 // New combined method - single file read for both hash and chunks
 ExtractionResult PlainTextExtractor::extract_with_hash(const std::filesystem::path& file_path) const {
     std::string content = get_string_content(file_path);
 
     if (content.empty()) {
-        return {"", {}, FileType::Text};
+        return {"", {}};
     }
 
     // Compute hash from loaded content (no additional file read!)
@@ -23,7 +25,7 @@ ExtractionResult PlainTextExtractor::extract_with_hash(const std::filesystem::pa
     // Extract chunks from the same loaded content
     std::vector<Chunk> chunks = extract_chunks_from_content(content);
     
-    return {content_hash, chunks, FileType::Text};
+    return {content_hash, chunks};
 }
 
 // Legacy method - now uses the new architecture

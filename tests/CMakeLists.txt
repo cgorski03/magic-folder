@@ -15,6 +15,8 @@ add_subdirectory(integration)   # Integration tests (future)
 set(ALL_TEST_SOURCES
     test_main.cpp
     # Unit test sources
+    unit/core/worker_test.cpp
+    unit/core/worker_pool_test.cpp
     unit/services/compression_service_test.cpp
     unit/services/file_processing_service_test.cpp
     unit/services/search_service_test.cpp
@@ -101,6 +103,13 @@ add_custom_target(test_db_all
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
+add_custom_target(test_core_all
+    COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="*WorkerTest*"
+    DEPENDS magic_folder_tests
+    COMMENT "Running all core layer tests"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
 # =============================================================================
 # INDIVIDUAL TEST TARGETS (for quick development iteration)
 # =============================================================================
@@ -124,11 +133,15 @@ add_custom_target(test_help
     COMMAND ${CMAKE_COMMAND} -E echo "  test_unit_all      - Run all unit tests"
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "Layer targets:"
+    COMMAND ${CMAKE_COMMAND} -E echo "  test_core_all      - Run all core tests"
     COMMAND ${CMAKE_COMMAND} -E echo "  test_services_all  - Run all service tests"
     COMMAND ${CMAKE_COMMAND} -E echo "  test_extractors_all- Run all extractor tests"
     COMMAND ${CMAKE_COMMAND} -E echo "  test_db_all        - Run all database tests"
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "Individual targets defined in subdirectories:"
+    COMMAND ${CMAKE_COMMAND} -E echo "  Core tests:"
+    COMMAND ${CMAKE_COMMAND} -E echo "    test_core             - Worker tests"
+    COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "  Service tests:"
     COMMAND ${CMAKE_COMMAND} -E echo "    test_compression_service      - CompressionService tests"
     COMMAND ${CMAKE_COMMAND} -E echo "    test_file_processing_service  - FileProcessingService tests"

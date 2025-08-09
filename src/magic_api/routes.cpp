@@ -70,13 +70,13 @@ crow::response Routes::handle_process_file(const crow::request &req) {
   try {
     std::string file_path = extract_file_path_from_request(req);
     std::cout << "Processing file: " << file_path << std::endl;
-    magic_core::ProcessFileResult result = file_processing_service_->process_file(file_path);
-    if (!result.success) {
-      std::cout << "Processing file failed: " << file_path << std::endl;
-      return create_json_response(create_error_response(result.error_message), 400);
+    // Request processing to add task to queue
+    std::optional<long long> task_id = file_processing_service_->request_processing(file_path);
+    if (!task_id.has_value()) {
+      std::cout << "File already being processed: " << file_path << std::endl;
+      return create_json_response(create_error_response("File already being processed"), 400);
     }
-    nlohmann::json response = create_success_response("File processed successfully");
-
+    nlohmann::json response = create_success_response("File processing queued successfully");
     return create_json_response(response);
   } catch (const std::exception &e) {
     std::cerr << "Exception in handle_process_file: " << e.what() << std::endl;
