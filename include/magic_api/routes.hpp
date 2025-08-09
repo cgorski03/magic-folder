@@ -10,9 +10,6 @@ class FileProcessingService;
 class FileDeleteService;
 class FileInfoService;
 class SearchService;
-namespace async {
-class Worker;
-}
 }  // namespace magic_core
 
 namespace magic_api {
@@ -22,8 +19,7 @@ class Routes {
   Routes(std::shared_ptr<magic_core::FileProcessingService> file_processing_service,
          std::shared_ptr<magic_core::FileDeleteService> file_delete_service,
          std::shared_ptr<magic_core::FileInfoService> file_info_service,
-         std::shared_ptr<magic_core::SearchService> search_service,
-         std::shared_ptr<magic_core::async::Worker> worker);
+         std::shared_ptr<magic_core::SearchService> search_service);
   ~Routes() = default;
 
   // Disable copy constructor and assignment
@@ -42,7 +38,6 @@ class Routes {
   std::shared_ptr<magic_core::FileDeleteService> file_delete_service_;
   std::shared_ptr<magic_core::FileInfoService> file_info_service_;
   std::shared_ptr<magic_core::SearchService> search_service_;
-  std::shared_ptr<magic_core::async::Worker> worker_;
 
   // Route handlers
   crow::response handle_health_check(const crow::request &req);

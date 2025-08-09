@@ -12,8 +12,8 @@
 #include "magic_core/services/file_processing_service.hpp"
 #include "magic_core/services/search_service.hpp"
 #include "magic_core/services/encryption_key_service.hpp"
-#include "magic_core/async/worker.hpp"
 #include "magic_core/extractors/content_extractor_factory.hpp"
+#include "magic_core/async/worker_pool.hpp"
 
 int main() {
   try {
@@ -45,14 +45,13 @@ int main() {
     auto search_service =
         std::make_shared<magic_core::SearchService>(metadata_store, ollama_client);
 
-    // Create a worker instance for synchronous processing
-    auto worker = std::make_shared<magic_core::async::Worker>(
-        1, // worker_id
+    auto worker_pool = std::make_shared<magic_core::async::WorkerPool>(
+        config.num_workers,
         *metadata_store,
         *ollama_client,
-        *content_extractor_factory
-    );
+        *content_extractor_factory);
 
+    worker_pool->start();
     // Parse server URL
     size_t colon_pos = server_url.find(':');
     if (colon_pos == std::string::npos) {
@@ -67,7 +66,7 @@ int main() {
 
     // Create routes and register them
     magic_api::Routes routes(file_processing_service, file_delete_service, file_info_service,
-                             search_service, worker);
+                             search_service);
     routes.register_routes(server);
 
     std::cout << "Server configured successfully. Starting..." << std::endl;

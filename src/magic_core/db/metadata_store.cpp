@@ -22,7 +22,6 @@ std::chrono::system_clock::time_point MetadataStore::string_to_time_point(
     const std::string &time_str) {
   std::tm tm_struct = {};
   std::stringstream ss(time_str);
-  // Parse time string in "YYYY-MM-DD HH:MM:SS" format
   ss >> std::get_time(&tm_struct, "%Y-%m-%d %H:%M:%S");
   if (ss.fail()) {
     throw std::runtime_error("Failed to parse time string: " + time_str +
