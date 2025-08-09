@@ -81,7 +81,7 @@ TEST_F(FileDeleteServiceTest, DeleteFile_OnlyRemovesSpecifiedFile) {
   auto kept_file = metadata_store_->get_file_metadata(keep_path);
   ASSERT_TRUE(kept_file.has_value());
   EXPECT_EQ(kept_file->path, "/test/file2.md");
-  EXPECT_EQ(kept_file->file_hash, "def456");
+  EXPECT_EQ(kept_file->content_hash, "def456");
   EXPECT_EQ(kept_file->file_type, magic_core::FileType::Markdown);
   EXPECT_EQ(kept_file->file_size, 2048);
 }

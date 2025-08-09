@@ -38,7 +38,7 @@ class MetadataStoreTest : public magic_tests::MetadataStoreTestBase {
 TEST_F(MetadataStoreTest, CreateFileStub_BasicFunctionality) {
   // Arrange
   auto basic_metadata = magic_tests::TestUtilities::create_test_basic_file_metadata(
-      "/test/stub.txt", "hash123", FileType::Text, 1024, "PROCESSING");
+      "/test/stub.txt", "hash123", FileType::Text, 1024, ProcessingStatus::PROCESSING);
 
   // Act
   int file_id = metadata_store_->upsert_file_stub(basic_metadata);
@@ -50,8 +50,8 @@ TEST_F(MetadataStoreTest, CreateFileStub_BasicFunctionality) {
   ASSERT_TRUE(retrieved.has_value());
   EXPECT_EQ(retrieved->id, file_id);
   EXPECT_EQ(retrieved->path, "/test/stub.txt");
-  EXPECT_EQ(retrieved->file_hash, "hash123");
-  EXPECT_EQ(retrieved->processing_status, "PROCESSING");
+  EXPECT_EQ(retrieved->content_hash, "hash123");
+  EXPECT_EQ(retrieved->processing_status, ProcessingStatus::PROCESSING);
   EXPECT_EQ(retrieved->file_type, FileType::Text);
   EXPECT_EQ(retrieved->file_size, 1024);
   EXPECT_TRUE(retrieved->summary_vector_embedding.empty());  // No AI analysis yet
@@ -60,7 +60,7 @@ TEST_F(MetadataStoreTest, CreateFileStub_BasicFunctionality) {
 TEST_F(MetadataStoreTest, CreateFileStub_WithAllFields) {
   // Arrange
   auto basic_metadata = magic_tests::TestUtilities::create_test_basic_file_metadata(
-      "/test/complex_stub.md", "hash456", FileType::Markdown, 2048, "IDLE",
+      "/test/complex_stub.md", "hash456", FileType::Markdown, 2048, ProcessingStatus::PROCESSED,
       "/original/path/file.md", "tag1,tag2,important");
 
   // Act
@@ -72,7 +72,7 @@ TEST_F(MetadataStoreTest, CreateFileStub_WithAllFields) {
   EXPECT_EQ(retrieved->path, "/test/complex_stub.md");
   EXPECT_EQ(retrieved->original_path, "/original/path/file.md");
   EXPECT_EQ(retrieved->tags, "tag1,tag2,important");
-  EXPECT_EQ(retrieved->processing_status, "IDLE");
+  EXPECT_EQ(retrieved->processing_status, ProcessingStatus::PROCESSED);
 }
 
 TEST_F(MetadataStoreTest, CreateFileStub_DuplicatePathUpdates) {
@@ -93,7 +93,7 @@ TEST_F(MetadataStoreTest, CreateFileStub_DuplicatePathUpdates) {
   // Verify the second metadata was stored (updated)
   auto retrieved = metadata_store_->get_file_metadata(file_id2);
   ASSERT_TRUE(retrieved.has_value());
-  EXPECT_EQ(retrieved->file_hash, "hash2");
+  EXPECT_EQ(retrieved->content_hash, "hash2");
 }
 
 TEST_F(MetadataStoreTest, CreateFileStub_UpdateResetsAIFields) {
@@ -123,7 +123,7 @@ TEST_F(MetadataStoreTest, CreateFileStub_UpdateResetsAIFields) {
   
   auto after_update = metadata_store_->get_file_metadata(file_id);
   ASSERT_TRUE(after_update.has_value());
-  EXPECT_EQ(after_update->file_hash, "hash2");  // Basic metadata updated
+  EXPECT_EQ(after_update->content_hash, "hash2");  // Basic metadata updated
   EXPECT_TRUE(after_update->summary_vector_embedding.empty());  // AI vector reset
   EXPECT_TRUE(after_update->suggested_category.empty());  // AI category reset
   EXPECT_TRUE(after_update->suggested_filename.empty());  // AI filename reset
@@ -256,7 +256,7 @@ TEST_F(MetadataStoreTest, GetFileMetadata_ByPath) {
   ASSERT_TRUE(retrieved.has_value());
   EXPECT_EQ(retrieved->id, file_id);
   EXPECT_EQ(retrieved->path, "/test/get_by_path.txt");
-  EXPECT_EQ(retrieved->file_hash, "get_hash");
+  EXPECT_EQ(retrieved->content_hash, "get_hash");
   EXPECT_EQ(retrieved->summary_vector_embedding.size(), 1024);
 }
 
@@ -274,7 +274,7 @@ TEST_F(MetadataStoreTest, GetFileMetadata_ById) {
   ASSERT_TRUE(retrieved.has_value());
   EXPECT_EQ(retrieved->id, file_id);
   EXPECT_EQ(retrieved->path, "/test/get_by_id.txt");
-  EXPECT_EQ(retrieved->file_hash, "get_id_hash");
+  EXPECT_EQ(retrieved->content_hash, "get_id_hash");
 }
 
 TEST_F(MetadataStoreTest, GetFileMetadata_NonExistentReturnsNullopt) {
@@ -444,7 +444,7 @@ TEST_F(MetadataStoreTest, RebuildFaissIndex_RebuildsSuccessfully) {
 TEST_F(MetadataStoreTest, CompleteWorkflow_FileStubToSearchable) {
   // Arrange
   auto basic_metadata = magic_tests::TestUtilities::create_test_basic_file_metadata(
-      "/test/workflow.txt", "workflow_hash", FileType::Text, 1024, "PROCESSING");
+      "/test/workflow.txt", "workflow_hash", FileType::Text, 1024, ProcessingStatus::PROCESSING);
 
   // Act & Assert - Complete workflow
 
@@ -454,7 +454,7 @@ TEST_F(MetadataStoreTest, CompleteWorkflow_FileStubToSearchable) {
 
   auto after_stub = metadata_store_->get_file_metadata(file_id);
   ASSERT_TRUE(after_stub.has_value());
-  EXPECT_EQ(after_stub->processing_status, "PROCESSING");
+  EXPECT_EQ(after_stub->processing_status, ProcessingStatus::PROCESSING);
   EXPECT_TRUE(after_stub->summary_vector_embedding.empty());
 
   // 2. Add AI analysis
@@ -863,7 +863,7 @@ namespace magic_core {
 TEST_F(MetadataStoreTest, OpenWithWrongKey_Throws) {
   // Arrange: ensure DB is initialized by performing a simple write
   auto basic_metadata = magic_tests::TestUtilities::create_test_basic_file_metadata(
-      "/test/encrypted.txt", "hash123", FileType::Text, 128, "IDLE");
+      "/test/encrypted.txt", "hash123", FileType::Text, 128, ProcessingStatus::PROCESSED);
   EXPECT_NO_THROW({ metadata_store_->upsert_file_stub(basic_metadata); });
 
   // Act + Assert: using an incorrect key must throw

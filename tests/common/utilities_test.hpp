@@ -26,7 +26,7 @@ class TestUtilities {
       const std::string& content_hash = "default_hash",
       magic_core::FileType file_type = magic_core::FileType::Text,
       size_t file_size = 1024,
-      const std::string& processing_status = "IDLE",
+      magic_core::ProcessingStatus processing_status = magic_core::ProcessingStatus::PROCESSED,
       const std::string& original_path = "",
       const std::string& tags = "");
 
@@ -36,7 +36,7 @@ class TestUtilities {
       magic_core::FileType file_type = magic_core::FileType::Text,
       size_t file_size = 1024,
       bool include_vector = false,
-      const std::string& processing_status = "COMPLETED",
+      magic_core::ProcessingStatus processing_status = magic_core::ProcessingStatus::PROCESSED,
       const std::string& original_path = "",
       const std::string& tags = "",
       const std::string& suggested_category = "",

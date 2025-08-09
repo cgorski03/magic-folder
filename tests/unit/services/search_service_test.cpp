@@ -304,7 +304,7 @@ TEST_F(SearchServiceTest, Search_ResultStructure) {
   EXPECT_GT(result.id, 0);
   EXPECT_GE(result.distance, 0.0f);
   EXPECT_FALSE(result.file.path.empty());
-  EXPECT_FALSE(result.file.file_hash.empty());
+  EXPECT_FALSE(result.file.content_hash.empty());
 }
 
 // Test error handling when Ollama client fails

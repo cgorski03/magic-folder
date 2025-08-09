@@ -39,6 +39,7 @@ class MockContentExtractor : public magic_core::ContentExtractor {
   MOCK_METHOD(bool, can_handle, (const std::filesystem::path& file_path), (const, override));
   MOCK_METHOD(std::vector<Chunk>, get_chunks, (const std::filesystem::path& file_path), (const, override));
   MOCK_METHOD(magic_core::ExtractionResult, extract_with_hash, (const std::filesystem::path& file_path), (const, override));
+  MOCK_METHOD(magic_core::FileType, get_file_type, (), (const, override));
   // Note: get_content_hash is not virtual in the base class, so we can't mock it directly
 };
 
@@ -134,12 +135,12 @@ inline magic_core::BasicFileMetadata create_test_basic_metadata(
     const std::string& content_hash = "test_hash_123",
     magic_core::FileType file_type = magic_core::FileType::Text,
     size_t file_size = 1024,
-    const std::string& processing_status = "PROCESSING") {
+    magic_core::ProcessingStatus processing_status = magic_core::ProcessingStatus::PROCESSING) {
   
   magic_core::BasicFileMetadata metadata;
   metadata.path = path;
   metadata.original_path = path;
-  metadata.file_hash = content_hash;
+  metadata.content_hash = content_hash;
   metadata.file_type = file_type;
   metadata.file_size = file_size;
   metadata.processing_status = processing_status;
@@ -164,10 +165,10 @@ inline magic_core::FileMetadata create_test_complete_metadata(
   magic_core::FileMetadata metadata;
   metadata.path = path;
   metadata.original_path = path;
-  metadata.file_hash = content_hash;
+  metadata.content_hash = content_hash;
   metadata.file_type = file_type;
   metadata.file_size = file_size;
-  metadata.processing_status = "COMPLETED";
+  metadata.processing_status = magic_core::ProcessingStatus::PROCESSED;
   metadata.suggested_category = suggested_category;
   metadata.suggested_filename = suggested_filename;
   
