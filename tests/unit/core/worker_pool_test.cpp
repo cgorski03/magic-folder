@@ -35,20 +35,20 @@ class WorkerPoolTest : public magic_tests::MetadataStoreTestBase {
 
 TEST_F(WorkerPoolTest, ConstructorThrowsOnZeroThreads) {
   EXPECT_THROW({
-    WorkerPool pool(0, *metadata_store_, *mock_ollama_client_, *mock_content_extractor_factory_);
+    WorkerPool pool(0, *metadata_store_, *task_queue_repo_, *mock_ollama_client_, *mock_content_extractor_factory_);
   }, std::invalid_argument);
 }
 
 TEST_F(WorkerPoolTest, StopWithoutStartIsNoOp) {
   EXPECT_NO_THROW({
-    WorkerPool pool(1, *metadata_store_, *mock_ollama_client_, *mock_content_extractor_factory_);
+    WorkerPool pool(1, *metadata_store_, *task_queue_repo_, *mock_ollama_client_, *mock_content_extractor_factory_);
     pool.stop();
   });
 }
 
 TEST_F(WorkerPoolTest, StartThenStopLifecycle_NoTasks) {
   EXPECT_NO_THROW({
-    WorkerPool pool(1, *metadata_store_, *mock_ollama_client_, *mock_content_extractor_factory_);
+    WorkerPool pool(1, *metadata_store_, *task_queue_repo_, *mock_ollama_client_, *mock_content_extractor_factory_);
     pool.start();
     // Give the worker thread a brief moment to enter its loop
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
@@ -59,7 +59,7 @@ TEST_F(WorkerPoolTest, StartThenStopLifecycle_NoTasks) {
 
 TEST_F(WorkerPoolTest, StartTwiceShowsWarningAndNoThrow) {
   EXPECT_NO_THROW({
-    WorkerPool pool(1, *metadata_store_, *mock_ollama_client_, *mock_content_extractor_factory_);
+    WorkerPool pool(1, *metadata_store_, *task_queue_repo_, *mock_ollama_client_, *mock_content_extractor_factory_);
     pool.start();
     // Second call should be a no-op with a warning, not an exception
     pool.start();

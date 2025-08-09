@@ -7,7 +7,9 @@
 #include <string>
 #include <vector>
 
+#include "magic_core/db/database_manager.hpp"
 #include "magic_core/db/metadata_store.hpp"
+#include "magic_core/db/task_queue_repo.hpp"
 
 namespace magic_tests {
 
@@ -71,9 +73,9 @@ class MetadataStoreTestBase : public ::testing::Test {
  protected:
   void SetUp() override {
     temp_db_path_ = TestUtilities::create_temp_test_db();
-      // Use a deterministic 32-byte key for testing (SQLCipher accepts arbitrary-length passphrases)
-      const std::string test_db_key(32, 'K');
-      metadata_store_ = std::make_shared<magic_core::MetadataStore>(temp_db_path_, test_db_key);
+    db_manager_ = std::make_shared<magic_core::DatabaseManager>(temp_db_path_);
+    metadata_store_ = std::make_shared<magic_core::MetadataStore>(*db_manager_);
+    task_queue_repo_ = std::make_shared<magic_core::TaskQueueRepo>(*db_manager_);
   }
 
   void TearDown() override {
@@ -82,7 +84,9 @@ class MetadataStoreTestBase : public ::testing::Test {
   }
 
   std::filesystem::path temp_db_path_;
+  std::shared_ptr<magic_core::DatabaseManager> db_manager_;
   std::shared_ptr<magic_core::MetadataStore> metadata_store_;
+  std::shared_ptr<magic_core::TaskQueueRepo> task_queue_repo_;
 };
 
 }  // namespace magic_tests

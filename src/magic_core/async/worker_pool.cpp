@@ -3,7 +3,7 @@
 
 namespace magic_core::async {
 
-WorkerPool::WorkerPool(size_t num_threads, MetadataStore& store, OllamaClient& ollama,
+WorkerPool::WorkerPool(size_t num_threads, MetadataStore& store, TaskQueueRepo& task_queue, OllamaClient& ollama,
                        ContentExtractorFactory& factory) {
     if (num_threads == 0) {
         throw std::invalid_argument("WorkerPool must have at least one thread.");
@@ -14,7 +14,7 @@ WorkerPool::WorkerPool(size_t num_threads, MetadataStore& store, OllamaClient& o
 
     for (size_t i = 0; i < num_threads; ++i) {
         m_workers.emplace_back(std::make_unique<Worker>(
-            static_cast<int>(i), store, ollama, factory));
+            static_cast<int>(i), store, task_queue, ollama, factory));
     }
     std::cout << "WorkerPool created with " << num_threads << " workers."
               << std::endl;

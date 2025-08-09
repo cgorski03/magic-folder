@@ -5,6 +5,7 @@
 #include <fstream>
 
 #include "magic_core/services/file_processing_service.hpp"
+#include "magic_core/db/task_queue_repo.hpp"
 #include "mocks_test.hpp"
 #include "utilities_test.hpp"
 
@@ -34,7 +35,7 @@ class FileProcessingServiceTest : public MetadataStoreTestBase {
     
     // Create service
     file_processing_service_ = std::make_unique<FileProcessingService>(
-        metadata_store_, mock_content_extractor_factory_, mock_ollama_client_);
+        metadata_store_, task_queue_repo_, mock_content_extractor_factory_, mock_ollama_client_);
   }
 
   void TearDown() override {

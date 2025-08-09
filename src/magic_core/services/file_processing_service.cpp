@@ -1,7 +1,7 @@
 #include "magic_core/services/file_processing_service.hpp"
 
 #include "magic_core/db/metadata_store.hpp"
-#include "magic_core/services/compression_service.hpp"
+// #include "magic_core/services/compression_service.hpp" // not used here
 
 namespace magic_core {
 
@@ -12,9 +12,11 @@ auto to_sys_time = [](std::filesystem::file_time_type ftime) {
 
 FileProcessingService::FileProcessingService(
     std::shared_ptr<magic_core::MetadataStore> metadata_store,
+    std::shared_ptr<magic_core::TaskQueueRepo> task_queue_repo,
     std::shared_ptr<magic_core::ContentExtractorFactory> content_extractor_factory,
     std::shared_ptr<magic_core::OllamaClient> ollama_client)
     : metadata_store_(metadata_store),
+      task_queue_repo_(task_queue_repo),
       content_extractor_factory_(content_extractor_factory),
       ollama_client_(ollama_client) {}
 
@@ -54,7 +56,7 @@ std::optional<long long> FileProcessingService::request_processing(
   try {
     metadata_store_->upsert_file_stub(
         create_file_stub(file_path, extractor.get_file_type(), content_hash));
-    long long task_id = metadata_store_->create_task("PROCESS_FILE", file_path.string());
+    long long task_id = task_queue_repo_->create_task("PROCESS_FILE", file_path.string());
     return task_id;
   } catch (const std::exception& e) {
     std::cout << "Error starting file processing: " << e.what() << std::endl;

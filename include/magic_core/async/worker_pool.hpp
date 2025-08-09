@@ -8,6 +8,7 @@ namespace magic_core {
 class MetadataStore;
 class OllamaClient;
 class ContentExtractorFactory;
+class TaskQueueRepo;
 }
 
 namespace magic_core::async {
@@ -31,7 +32,7 @@ public:
      * @param ollama A reference to the shared Ollama client.
      * @param factory A reference to the shared content extractor factory.
      */
-    WorkerPool(size_t num_threads, MetadataStore& store, OllamaClient& ollama,
+    WorkerPool(size_t num_threads, MetadataStore& store, TaskQueueRepo& task_queue, OllamaClient& ollama,
                ContentExtractorFactory& factory);
 
     /**
