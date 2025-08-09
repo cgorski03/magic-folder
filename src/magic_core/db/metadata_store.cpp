@@ -117,7 +117,7 @@ void MetadataStore::create_tables() {
           path TEXT UNIQUE NOT NULL,
           original_path TEXT,
           file_hash TEXT NOT NULL,
-          processing_status TEXT DEFAULT 'IDLE',
+          processing_status TEXT NOT NULL,
           summary_vector_blob BLOB,
           suggested_category TEXT,
           suggested_filename TEXT,
@@ -185,8 +185,8 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
               "tags=?, last_modified=?, file_type=?, file_size=?, "
               "summary_vector_blob=NULL, suggested_category=NULL, suggested_filename=NULL WHERE "
               "path=?"
-           << basic_metadata.original_path << basic_metadata.file_hash
-           << basic_metadata.processing_status << basic_metadata.tags << last_modified_str
+           << basic_metadata.original_path << basic_metadata.content_hash
+           << to_string(basic_metadata.processing_status) << basic_metadata.tags << last_modified_str
            << to_string(basic_metadata.file_type) << static_cast<int64_t>(basic_metadata.file_size)
            << basic_metadata.path;
       return existing_id;
@@ -194,8 +194,8 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
       // File doesn't exist, insert new
       *db_ << "INSERT INTO files (path, original_path, file_hash, processing_status, tags, "
               "last_modified, created_at, file_type, file_size) VALUES (?,?,?,?,?,?,?,?,?)"
-           << basic_metadata.path << basic_metadata.original_path << basic_metadata.file_hash
-           << basic_metadata.processing_status << basic_metadata.tags << last_modified_str
+           << basic_metadata.path << basic_metadata.original_path << basic_metadata.content_hash
+           << to_string(basic_metadata.processing_status) << basic_metadata.tags << last_modified_str
            << created_at_str << to_string(basic_metadata.file_type)
            << static_cast<int64_t>(basic_metadata.file_size);
       return static_cast<int>(db_->last_insert_rowid());
@@ -240,6 +240,14 @@ void MetadataStore::update_file_ai_analysis(int file_id,
     }
   } catch (const sqlite::sqlite_exception &e) {
     throw MetadataStoreError("Failed to update file AI analysis: " + std::string(e.what()));
+  }
+}
+
+void MetadataStore::update_file_processing_status(int file_id, ProcessingStatus processing_status) {
+  try {
+    *db_ << "UPDATE files SET processing_status = ? WHERE id = ?" << to_string(processing_status) << file_id;
+  } catch (const sqlite::sqlite_exception &e) {
+    throw MetadataStoreError("Failed to update file processing status: " + std::string(e.what()));
   }
 }
 
@@ -353,9 +361,9 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &
           metadata.path = path;
           if (original_path)
             metadata.original_path = *original_path;
-          metadata.file_hash = file_hash;
+          metadata.content_hash = file_hash;
           if (processing_status)
-            metadata.processing_status = *processing_status;
+            metadata.processing_status = processing_status_from_string(*processing_status);
           if (tags)
             metadata.tags = *tags;
           metadata.last_modified = string_to_time_point(last_modified);
@@ -402,9 +410,9 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(int id) {
           metadata.path = path;
           if (original_path)
             metadata.original_path = *original_path;
-          metadata.file_hash = file_hash;
+          metadata.content_hash = file_hash;
           if (processing_status)
-            metadata.processing_status = *processing_status;
+            metadata.processing_status = processing_status_from_string(*processing_status);
           if (tags)
             metadata.tags = *tags;
           metadata.last_modified = string_to_time_point(last_modified);
@@ -436,6 +444,20 @@ bool MetadataStore::file_exists(const std::string &path) {
   return get_file_metadata(path).has_value();
 }
 
+std::optional<ProcessingStatus> MetadataStore::file_processing_status(std::string content_hash) {
+  try {
+    std::optional<ProcessingStatus> result;
+    // Column is stored as file_hash in the schema
+    *db_ << "SELECT processing_status FROM files WHERE file_hash = ?" << content_hash >>
+        [&](std::string processing_status) {
+          result = processing_status_from_string(processing_status);
+        };
+    return result;
+  } catch (const sqlite::sqlite_exception &e) {
+    throw MetadataStoreError("Failed to get file processing status: " + std::string(e.what()));
+  }
+}
+
 // TODO: This will probably not be super usable. eventually it should have pagination
 std::vector<FileMetadata> MetadataStore::list_all_files() {
   std::vector<FileMetadata> files;
@@ -449,7 +471,7 @@ std::vector<FileMetadata> MetadataStore::list_all_files() {
           FileMetadata metadata;
           metadata.id = id;
           metadata.path = path;
-          metadata.file_hash = file_hash;
+          metadata.content_hash = file_hash;
           metadata.last_modified = string_to_time_point(last_modified);
           metadata.created_at = string_to_time_point(created_at);
           metadata.file_type = file_type_from_string(file_type);

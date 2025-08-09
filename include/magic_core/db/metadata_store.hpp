@@ -22,51 +22,6 @@
 
 namespace magic_core {
 
-struct BasicFileMetadata {
-  int id = 0;
-  std::string path;
-  std::string original_path;
-  std::string file_hash;
-  std::chrono::system_clock::time_point last_modified;
-  std::chrono::system_clock::time_point created_at;
-  FileType file_type;
-  size_t file_size = 0;
-  std::string processing_status = "IDLE";
-  std::string tags;
-};
-
-struct FileMetadata : public BasicFileMetadata {
-  std::vector<float> summary_vector_embedding;
-  std::string suggested_category;
-  std::string suggested_filename;
-};
-
-struct ChunkMetadata {
-  int id;
-  std::vector<float> vector_embedding;
-  int file_id;
-  int chunk_index;
-  std::vector<char> content;
-};
-struct SearchResult {
-  int id;
-  float distance;
-};
-
-struct FileSearchResult : public SearchResult {
-  FileMetadata file;
-};
-
-struct ChunkSearchResult : public SearchResult {
-  int file_id;
-  int chunk_index;
-  std::vector<char> compressed_content;
-};
-
-struct ProcessedChunk {
-  Chunk chunk;
-  std::vector<char> compressed_content;
-};
 
 enum class TaskStatus { PENDING, PROCESSING, COMPLETED, FAILED };
 
@@ -108,11 +63,13 @@ inline TaskStatus task_status_from_string(const std::string &str) {
   throw std::invalid_argument("Invalid TaskStatus string: " + str);
 }
 
-enum class ProcessingStatus { IDLE, PROCESSING, FAILED };
+enum class ProcessingStatus { QUEUED, PROCESSED, PROCESSING, FAILED };
 inline std::string to_string(ProcessingStatus status) {
   switch (status) {
-    case ProcessingStatus::IDLE:
-      return "IDLE";
+    case ProcessingStatus::PROCESSED:
+      return "PROCESSED";
+    case ProcessingStatus::QUEUED:
+      return "QUEUED";
     case ProcessingStatus::PROCESSING:
       return "PROCESSING";
     case ProcessingStatus::FAILED:
@@ -123,8 +80,10 @@ inline std::string to_string(ProcessingStatus status) {
 }
 
 inline ProcessingStatus processing_status_from_string(const std::string &str) {
-  if (str == "IDLE")
-    return ProcessingStatus::IDLE;
+  if (str == "PROCESSED")
+    return ProcessingStatus::PROCESSED;
+  if (str == "QUEUED")
+    return ProcessingStatus::QUEUED;
   if (str == "PROCESSING")
     return ProcessingStatus::PROCESSING;
   if (str == "FAILED")
@@ -142,6 +101,50 @@ class MetadataStoreError : public std::exception {
 
  private:
   std::string message_;
+};
+struct BasicFileMetadata {
+  int id = 0;
+  std::string path;
+  std::string original_path;
+  std::string content_hash;
+  std::chrono::system_clock::time_point last_modified;
+  std::chrono::system_clock::time_point created_at;
+  FileType file_type;
+  size_t file_size = 0;
+  ProcessingStatus processing_status = ProcessingStatus::PROCESSED;
+  std::string tags;
+};
+struct FileMetadata : public BasicFileMetadata {
+  std::vector<float> summary_vector_embedding;
+  std::string suggested_category;
+  std::string suggested_filename;
+};
+
+struct ChunkMetadata {
+  int id;
+  std::vector<float> vector_embedding;
+  int file_id;
+  int chunk_index;
+  std::vector<char> content;
+};
+struct SearchResult {
+  int id;
+  float distance;
+};
+
+struct FileSearchResult : public SearchResult {
+  FileMetadata file;
+};
+
+struct ChunkSearchResult : public SearchResult {
+  int file_id;
+  int chunk_index;
+  std::vector<char> compressed_content;
+};
+
+struct ProcessedChunk {
+  Chunk chunk;
+  std::vector<char> compressed_content;
 };
 
 class MetadataStore {
@@ -167,7 +170,8 @@ class MetadataStore {
                                const std::vector<float> &summary_vector,
                                const std::string &suggested_category = "",
                                const std::string &suggested_filename = "",
-                               ProcessingStatus processing_status = ProcessingStatus::IDLE);
+                               ProcessingStatus processing_status = ProcessingStatus::PROCESSED);
+  void update_file_processing_status(int file_id, ProcessingStatus processing_status);
 
   void upsert_chunk_metadata(int file_id, const std::vector<ProcessedChunk> &chunks);
 
@@ -187,6 +191,7 @@ class MetadataStore {
 
   // Check if file exists
   bool file_exists(const std::string &path);
+  std::optional<ProcessingStatus> file_processing_status(std::string content_hash);
 
   std::vector<FileSearchResult> search_similar_files(const std::vector<float> &query_vector, int k);
   std::vector<ChunkSearchResult> search_similar_chunks(const std::vector<int> &file_ids,
