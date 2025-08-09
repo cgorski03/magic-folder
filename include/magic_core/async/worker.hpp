@@ -2,12 +2,14 @@
 
 #include <atomic>
 #include <thread>
+#include "magic_core/db/task.hpp"
 
 namespace magic_core {
 class MetadataStore;
 class OllamaClient;
 struct Task;
 class ContentExtractorFactory;
+class TaskQueueRepo;
 }
 
 namespace magic_core {
@@ -34,7 +36,7 @@ namespace async {
        * @param ollama A reference to the Ollama client for AI operations.
        * @param factory A reference to the content extractor factory.
        */
-      Worker(int worker_id, MetadataStore& store, OllamaClient& ollama, ContentExtractorFactory& factory);
+      Worker(int worker_id, MetadataStore& store, TaskQueueRepo& task_queue, OllamaClient& ollama, ContentExtractorFactory& factory);
   
       /**
        * @brief Destructor. Ensures the worker thread is stopped and joined cleanly.
@@ -85,6 +87,7 @@ namespace async {
       int worker_id;
   
       MetadataStore& metadata_store;
+      TaskQueueRepo& task_queue_repo;
       OllamaClient& ollama_client;
       ContentExtractorFactory& extractor_factory;
   

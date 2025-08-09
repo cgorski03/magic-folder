@@ -5,13 +5,14 @@
 #include "magic_api/config.hpp"
 #include "magic_api/routes.hpp"
 #include "magic_api/server.hpp"
+#include "magic_core/db/database_manager.hpp"
 #include "magic_core/db/metadata_store.hpp"
+#include "magic_core/db/task_queue_repo.hpp"
 #include "magic_core/llm/ollama_client.hpp"
 #include "magic_core/services/file_delete_service.hpp"
 #include "magic_core/services/file_info_service.hpp"
 #include "magic_core/services/file_processing_service.hpp"
 #include "magic_core/services/search_service.hpp"
-#include "magic_core/services/encryption_key_service.hpp"
 #include "magic_core/extractors/content_extractor_factory.hpp"
 #include "magic_core/async/worker_pool.hpp"
 
@@ -23,7 +24,7 @@ int main() {
     std::string metadata_path = config.metadata_db_path;
     std::string ollama_server_url = config.ollama_url;
     std::string model = config.embedding_model;
-    std::string db_key = magic_core::EncryptionKeyService::get_database_key();
+    // DB key no longer needed for DatabaseManager constructor in this refactor
     std::cout << "Starting Magic Folder API Server..." << std::endl;
     std::cout << "Server URL: " << server_url << std::endl;
     std::cout << "Metadata DB Path: " << metadata_path << std::endl;
@@ -32,14 +33,16 @@ int main() {
 
     // Initialize core components
     auto ollama_client = std::make_shared<magic_core::OllamaClient>(ollama_server_url, model);
-    auto metadata_store = std::make_shared<magic_core::MetadataStore>(metadata_path, db_key);
+    auto db_manager = std::make_shared<magic_core::DatabaseManager>(metadata_path);
+    auto metadata_store = std::make_shared<magic_core::MetadataStore>(*db_manager);
+    auto task_queue_repo = std::make_shared<magic_core::TaskQueueRepo>(*db_manager);
     auto content_extractor_factory = std::make_shared<magic_core::ContentExtractorFactory>();
 
     auto file_processing_service = std::make_shared<magic_core::FileProcessingService>(
-        metadata_store, 
+        metadata_store,
+        task_queue_repo,
         content_extractor_factory,
-        ollama_client
-    );
+        ollama_client);
     auto file_delete_service = std::make_shared<magic_core::FileDeleteService>(metadata_store);
     auto file_info_service = std::make_shared<magic_core::FileInfoService>(metadata_store);
     auto search_service =
@@ -48,6 +51,7 @@ int main() {
     auto worker_pool = std::make_shared<magic_core::async::WorkerPool>(
         config.num_workers,
         *metadata_store,
+        *task_queue_repo,
         *ollama_client,
         *content_extractor_factory);
 

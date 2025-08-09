@@ -17,7 +17,6 @@ using namespace magic_core;
 using namespace magic_core::async;
 using ::testing::_;
 using ::testing::Return;
-using ::testing::InSequence;
 using ::testing::StrictMock;
 
 class WorkerTest : public magic_tests::MetadataStoreTestBase {
@@ -34,6 +33,7 @@ class WorkerTest : public magic_tests::MetadataStoreTestBase {
     worker_ = std::make_unique<Worker>(
         1, // worker_id
         *metadata_store_,
+        *task_queue_repo_,
         *mock_ollama_client_,
         *mock_content_extractor_factory_
     );
@@ -89,7 +89,7 @@ TEST_F(WorkerTest, RunOneTaskWithPendingTask) {
     metadata_store_->upsert_file_stub(stub);
   }
   // Create a task in the metadata store
-  long long task_id = metadata_store_->create_task("PROCESS_FILE", test_file_path.string());
+  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", test_file_path.string());
   EXPECT_GT(task_id, 0);
   
   // Set up mock expectations
@@ -120,7 +120,7 @@ TEST_F(WorkerTest, RunOneTaskWithPendingTask) {
   EXPECT_TRUE(result);
   
   // Verify the task status was updated to COMPLETED
-  auto completed_tasks = metadata_store_->get_tasks_by_status(TaskStatus::COMPLETED);
+  auto completed_tasks = task_queue_repo_->get_tasks_by_status(TaskStatus::COMPLETED);
   EXPECT_FALSE(completed_tasks.empty());
   EXPECT_EQ(completed_tasks[0].file_path, test_file_path.string());
   
@@ -146,7 +146,7 @@ TEST_F(WorkerTest, RunOneTaskWithFailedExtraction) {
         ProcessingStatus::QUEUED);
     metadata_store_->upsert_file_stub(stub);
   }
-  long long task_id2 = metadata_store_->create_task("PROCESS_FILE", test_file_path.string());
+  long long task_id2 = task_queue_repo_->create_task("PROCESS_FILE", test_file_path.string());
   EXPECT_GT(task_id2, 0);
   
   // Set up mock to throw exception during extraction
@@ -165,7 +165,7 @@ TEST_F(WorkerTest, RunOneTaskWithFailedExtraction) {
   EXPECT_TRUE(result);
   
   // Verify the task status was updated to FAILED
-  auto failed_tasks = metadata_store_->get_tasks_by_status(TaskStatus::FAILED);
+  auto failed_tasks = task_queue_repo_->get_tasks_by_status(TaskStatus::FAILED);
   EXPECT_FALSE(failed_tasks.empty());
   EXPECT_EQ(failed_tasks[0].file_path, test_file_path.string());
   
@@ -175,7 +175,7 @@ TEST_F(WorkerTest, RunOneTaskWithFailedExtraction) {
 TEST_F(WorkerTest, RunOneTaskWithNonExistentFile) {
   // Create a task for a file that doesn't exist
   const std::string non_existent_path = "/path/to/nonexistent/file.txt";
-  long long task_id = metadata_store_->create_task("FILE_PROCESSING", non_existent_path);
+  long long task_id = task_queue_repo_->create_task("FILE_PROCESSING", non_existent_path);
   EXPECT_GT(task_id, 0);
   
   // Run the task
@@ -185,7 +185,7 @@ TEST_F(WorkerTest, RunOneTaskWithNonExistentFile) {
   EXPECT_TRUE(result);
   
   // Verify the task status was updated to FAILED
-  auto failed_tasks = metadata_store_->get_tasks_by_status(TaskStatus::FAILED);
+  auto failed_tasks = task_queue_repo_->get_tasks_by_status(TaskStatus::FAILED);
   EXPECT_FALSE(failed_tasks.empty());
   EXPECT_EQ(failed_tasks[0].file_path, "/path/to/nonexistent/file.txt");
 }
@@ -196,6 +196,7 @@ TEST_F(WorkerTest, WorkerLifecycle) {
     auto test_worker = std::make_unique<Worker>(
         2, // different worker_id
         *metadata_store_,
+        *task_queue_repo_,
         *mock_ollama_client_,
         *mock_content_extractor_factory_
     );
@@ -238,8 +239,8 @@ TEST_F(WorkerTest, MultipleTasksProcessedSequentially) {
   }
   
   // Create tasks for both files
-  long long task_id1 = metadata_store_->create_task("FILE_PROCESSING", test_file1.string());
-  long long task_id2 = metadata_store_->create_task("FILE_PROCESSING", test_file2.string());
+  long long task_id1 = task_queue_repo_->create_task("FILE_PROCESSING", test_file1.string());
+  long long task_id2 = task_queue_repo_->create_task("FILE_PROCESSING", test_file2.string());
   
   // Set up mock expectations for both tasks
   ExtractionResult mock_extraction_result;
@@ -270,7 +271,7 @@ TEST_F(WorkerTest, MultipleTasksProcessedSequentially) {
   EXPECT_TRUE(result2);
   
   // Verify both tasks were completed
-  auto completed_tasks = metadata_store_->get_tasks_by_status(TaskStatus::COMPLETED);
+  auto completed_tasks = task_queue_repo_->get_tasks_by_status(TaskStatus::COMPLETED);
   EXPECT_EQ(completed_tasks.size(), 2);
   
   // Check that both file paths are in the completed tasks

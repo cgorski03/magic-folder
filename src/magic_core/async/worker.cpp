@@ -8,16 +8,19 @@
 #include "magic_core/extractors/content_extractor_factory.hpp"
 #include "magic_core/llm/ollama_client.hpp"
 #include "magic_core/services/compression_service.hpp"
+#include "magic_core/db/task_queue_repo.hpp"
 
 namespace magic_core {
 namespace async {
 
 Worker::Worker(int worker_id,
                MetadataStore& store,
+               TaskQueueRepo& task_queue,
                OllamaClient& ollama,
                ContentExtractorFactory& factory)
     : worker_id(worker_id),
       metadata_store(store),
+      task_queue_repo(task_queue),
       ollama_client(ollama),
       extractor_factory(factory) {
   std::cout << "Worker [" << worker_id << "] created." << std::endl;
@@ -56,7 +59,7 @@ void Worker::run_loop() {
   // The loop continues as long as the stop flag is false.
   while (!should_stop.load()) {
     // Fetch and claim a task in one atomic operation.
-    std::optional<Task> task_opt = metadata_store.fetch_and_claim_next_task();
+    std::optional<Task> task_opt = task_queue_repo.fetch_and_claim_next_task();
 
     if (task_opt.has_value()) {
       // If a task was found, execute it.
@@ -76,8 +79,7 @@ bool Worker::run_one_task() {
   std::cout << "Worker [" << worker_id
             << "] running a single synchronous cycle..." << std::endl;
 
-  std::optional<Task> task_opt =
-      metadata_store.fetch_and_claim_next_task();
+  std::optional<Task> task_opt = task_queue_repo.fetch_and_claim_next_task();
 
   if (task_opt.has_value()) {
       std::cout << "Worker [" << worker_id << "] found task for file: "
@@ -161,7 +163,7 @@ void Worker::execute_processing_task(const Task& task) {
     }
     
     // Mark task as completed
-    metadata_store.update_task_status(task.id, TaskStatus::COMPLETED);
+    task_queue_repo.update_task_status(task.id, TaskStatus::COMPLETED);
     
   } catch (const std::exception& e) {
     std::cerr << "Worker [" << worker_id << "] CRITICAL ERROR processing file "
@@ -171,7 +173,7 @@ void Worker::execute_processing_task(const Task& task) {
     if (file_id != -1) {
       metadata_store.update_file_ai_analysis(file_id, {}, "", "", ProcessingStatus::FAILED);
     }
-    metadata_store.mark_task_as_failed(task.id, e.what());
+    task_queue_repo.mark_task_as_failed(task.id, e.what());
   }
 }
 

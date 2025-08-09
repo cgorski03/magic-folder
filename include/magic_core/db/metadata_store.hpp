@@ -1,67 +1,24 @@
 #pragma once
-#define SQLITE_HAS_CODEC 1
-#define SQLCIPHER_CRYPTO_OPENSSL 1
-
 #include <faiss/Index.h>
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexHNSW.h>
 #include <faiss/IndexIDMap.h>
 // Why is this file named with a different convention
 #include <faiss/index_io.h>
-#include <sqlcipher/sqlite3.h>
 #include <sqlite_modern_cpp.h>
 #include <chrono>
 #include <filesystem>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
-#include <memory>
 
 #include "magic_core/types/chunk.hpp"
 #include "magic_core/types/file.hpp"
+#include "magic_core/db/database_manager.hpp"
 
 namespace magic_core {
 
-
-enum class TaskStatus { PENDING, PROCESSING, COMPLETED, FAILED };
-
-  struct Task {
-    long long id = 0;
-    std::string task_type;
-    std::string file_path;
-    TaskStatus status = TaskStatus::PENDING;
-    int priority = 10;
-    std::string error_message;
-    std::chrono::system_clock::time_point created_at;
-    std::chrono::system_clock::time_point updated_at;
-  };
-
-inline std::string to_string(TaskStatus status) {
-  switch (status) {
-    case TaskStatus::PENDING:
-      return "PENDING";
-    case TaskStatus::PROCESSING:
-      return "PROCESSING";
-    case TaskStatus::COMPLETED:
-      return "COMPLETED";
-    case TaskStatus::FAILED:
-      return "FAILED";
-    default:
-      return "UNKNOWN";
-  }
-}
-
-inline TaskStatus task_status_from_string(const std::string &str) {
-  if (str == "PENDING")
-    return TaskStatus::PENDING;
-  if (str == "PROCESSING")
-    return TaskStatus::PROCESSING;
-  if (str == "COMPLETED")
-    return TaskStatus::COMPLETED;
-  if (str == "FAILED")
-    return TaskStatus::FAILED;
-  throw std::invalid_argument("Invalid TaskStatus string: " + str);
-}
+// Task types/status and Task struct are declared in task_queue_repo.hpp
 
 enum class ProcessingStatus { QUEUED, PROCESSED, PROCESSING, FAILED };
 inline std::string to_string(ProcessingStatus status) {
@@ -150,16 +107,16 @@ struct ProcessedChunk {
 class MetadataStore {
  public:
   static constexpr int VECTOR_DIMENSION = 1024;
-  explicit MetadataStore(const std::filesystem::path& db_path, const std::string& db_key);
+  explicit MetadataStore(DatabaseManager& db_manager);
   ~MetadataStore();
 
   // Disable copy constructor and assignment
   MetadataStore(const MetadataStore &) = delete;
   MetadataStore &operator=(const MetadataStore &) = delete;
 
-  // Allow move constructor and assignment
-  MetadataStore(MetadataStore &&) noexcept;
-  MetadataStore &operator=(MetadataStore &&) noexcept;
+  // Non-movable to keep DB references stable
+  MetadataStore(MetadataStore &&) = delete;
+  MetadataStore &operator=(MetadataStore &&) = delete;
 
   // Initialize the database and build the Faiss index
   void initialize();
@@ -200,19 +157,8 @@ class MetadataStore {
 
   void rebuild_faiss_index();
 
-  // Task queue management
-  long long create_task(const std::string& task_type,
-                        const std::string& file_path,
-                        int priority = 10);
-  std::optional<Task> fetch_and_claim_next_task();
-  void update_task_status(long long task_id, TaskStatus new_status);
-  void mark_task_as_failed(long long task_id, const std::string& error_message);
-  std::vector<Task> get_tasks_by_status(TaskStatus status);
-  void clear_completed_tasks(int older_than_days = 30);
-
  private:
-  std::filesystem::path db_path_;
-  std::unique_ptr<sqlite::database> db_;
+  sqlite::database& db_; // non-owning reference provided by DatabaseManager
     
   // In-memory Faiss index
   faiss::IndexIDMap *faiss_index_;
@@ -226,7 +172,6 @@ class MetadataStore {
   faiss::IndexIDMap *create_base_index();
   void search_faiss_index(faiss::IndexIDMap *index, const std::vector<float> &query_vector, int k, std::vector<float> &results, std::vector<faiss::idx_t> &labels);
 
-  void create_tables();
   std::chrono::system_clock::time_point get_file_last_modified(
       const std::filesystem::path &file_path);
   // Time point conversions

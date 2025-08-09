@@ -39,34 +39,9 @@ std::chrono::system_clock::time_point MetadataStore::get_file_last_modified(
   return sctp;
 }
 
-MetadataStore::MetadataStore(const std::filesystem::path &db_path, const std::string &db_key)
-    : db_path_(db_path), db_(nullptr), faiss_index_(nullptr) {
-  try {
-    std::filesystem::create_directories(db_path_.parent_path());
-
-    db_ = std::make_unique<sqlite::database>(db_path_.string());
-
-    sqlite3 *handle = db_->connection().get();
-    if (!handle) {
-      throw MetadataStoreError("Failed to get native database handle after opening.");
-    }
-
-    if (sqlite3_key(handle, db_key.c_str(), db_key.length()) != SQLITE_OK) {
-      std::string error_msg = sqlite3_errmsg(handle);
-      throw MetadataStoreError("Failed to key database: " + error_msg);
-    }
-
-    //    If the key is wrong, this will throw a sqlite::sqlite_exception.
-    *db_ << "SELECT count(*) FROM sqlite_master;";
-
-    // The rest of the initialization proceeds as normal
-    *db_ << "PRAGMA foreign_keys = ON;";
-    create_tables();
-    rebuild_faiss_index();
-
-  } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to initialize database: " + std::string(e.what()));
-  }
+MetadataStore::MetadataStore(DatabaseManager &db_manager)
+    : db_(db_manager.get_db()), faiss_index_(nullptr) {
+  rebuild_faiss_index();
 }
 MetadataStore::~MetadataStore() {
   if (faiss_index_) {
@@ -74,93 +49,11 @@ MetadataStore::~MetadataStore() {
   }
 }
 
-MetadataStore::MetadataStore(MetadataStore &&other) noexcept
-    : db_path_(std::move(other.db_path_)),
-      db_(std::move(other.db_)),
-      faiss_index_(other.faiss_index_) {
-  other.faiss_index_ = nullptr;
-}
+// MetadataStore is non-movable to keep DB references stable
 
-MetadataStore &MetadataStore::operator=(MetadataStore &&other) noexcept {
-  if (this != &other) {
-    if (faiss_index_) {
-      // Clean up current faiss index in memory
-      delete faiss_index_;
-    }
-    db_path_ = std::move(other.db_path_);
-    db_ = std::move(other.db_);
-    faiss_index_ = other.faiss_index_;
-    other.faiss_index_ = nullptr;
-  }
-  return *this;
-}
+void MetadataStore::initialize() { rebuild_faiss_index(); }
 
-void MetadataStore::initialize() {
-  try {
-    std::filesystem::create_directories(db_path_.parent_path());
-    db_ = std::make_unique<sqlite::database>(db_path_.string());
-    *db_ << "PRAGMA foreign_keys = ON;";
-
-    create_tables();
-    rebuild_faiss_index();
-  } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to initialize database: " + std::string(e.what()));
-  }
-}
-
-void MetadataStore::create_tables() {
-  try {
-    *db_ << R"(
-      CREATE TABLE IF NOT EXISTS files (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          path TEXT UNIQUE NOT NULL,
-          original_path TEXT,
-          file_hash TEXT NOT NULL,
-          processing_status TEXT NOT NULL,
-          summary_vector_blob BLOB,
-          suggested_category TEXT,
-          suggested_filename TEXT,
-          tags TEXT,
-          last_modified TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          file_type TEXT NOT NULL,
-          file_size INTEGER NOT NULL
-      )
-    )";
-
-    *db_ << R"(
-      CREATE TABLE IF NOT EXISTS chunks (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          file_id INTEGER NOT NULL,
-          chunk_index INTEGER NOT NULL,
-          content BLOB NOT NULL,
-          vector_blob BLOB,
-          FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
-      )
-    )";
-
-    *db_ << R"(
-      CREATE TABLE IF NOT EXISTS task_queue (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          task_type TEXT NOT NULL,
-          file_path TEXT NOT NULL,
-          status TEXT DEFAULT 'PENDING',
-          priority INTEGER DEFAULT 10,
-          error_message TEXT,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-      )
-    )";
-
-    // Create index for efficient task queue queries
-    *db_ << R"(
-      CREATE INDEX IF NOT EXISTS idx_task_queue_status_priority 
-      ON task_queue(status, priority, created_at)
-    )";
-  } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to create tables: " + std::string(e.what()));
-  }
-}
+// Tables/migrations are managed by DatabaseManager
 
 /*
 This upserts a file stub. If the file already exists, it will update the file.
@@ -175,12 +68,12 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
 
     // Check if file exists BEFORE doing the upsert
     int existing_id = -1;
-    *db_ << "SELECT id FROM files WHERE path = ?" << basic_metadata.path >>
+    db_ << "SELECT id FROM files WHERE path = ?" << basic_metadata.path >>
         [&](int id) { existing_id = id; };
 
     if (existing_id != -1) {
       // File exists, update it and reset AI-generated fields since file content changed
-      *db_ << "UPDATE files SET original_path=?, file_hash=?, processing_status=?, "
+      db_ << "UPDATE files SET original_path=?, file_hash=?, processing_status=?, "
               "tags=?, last_modified=?, file_type=?, file_size=?, "
               "summary_vector_blob=NULL, suggested_category=NULL, suggested_filename=NULL WHERE "
               "path=?"
@@ -191,13 +84,13 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
       return existing_id;
     } else {
       // File doesn't exist, insert new
-      *db_ << "INSERT INTO files (path, original_path, file_hash, processing_status, tags, "
+      db_ << "INSERT INTO files (path, original_path, file_hash, processing_status, tags, "
               "last_modified, created_at, file_type, file_size) VALUES (?,?,?,?,?,?,?,?,?)"
            << basic_metadata.path << basic_metadata.original_path << basic_metadata.content_hash
            << to_string(basic_metadata.processing_status) << basic_metadata.tags << last_modified_str
            << created_at_str << to_string(basic_metadata.file_type)
            << static_cast<int64_t>(basic_metadata.file_size);
-      return static_cast<int>(db_->last_insert_rowid());
+      return static_cast<int>(db_.last_insert_rowid());
     }
   } catch (const sqlite::sqlite_exception &e) {
     throw MetadataStoreError("Failed to upsert file stub: " + std::string(e.what()));
@@ -228,12 +121,12 @@ void MetadataStore::update_file_ai_analysis(int file_id,
       std::vector<char> vector_blob(summary_vector.size() * sizeof(float));
       std::memcpy(vector_blob.data(), summary_vector.data(), vector_blob.size());
 
-      *db_ << "UPDATE files SET summary_vector_blob = ?, suggested_category = ?, "
+      db_ << "UPDATE files SET summary_vector_blob = ?, suggested_category = ?, "
               "suggested_filename = ?, processing_status = ? WHERE id = ?"
            << vector_blob << suggested_category << suggested_filename
            << to_string(processing_status) << file_id;
     } else {
-      *db_ << "UPDATE files SET summary_vector_blob = NULL, suggested_category = ?, "
+      db_ << "UPDATE files SET summary_vector_blob = NULL, suggested_category = ?, "
               "suggested_filename = ?, processing_status = ? WHERE id = ?"
            << suggested_category << suggested_filename << to_string(processing_status) << file_id;
     }
@@ -244,7 +137,7 @@ void MetadataStore::update_file_ai_analysis(int file_id,
 
 void MetadataStore::update_file_processing_status(int file_id, ProcessingStatus processing_status) {
   try {
-    *db_ << "UPDATE files SET processing_status = ? WHERE id = ?" << to_string(processing_status) << file_id;
+    db_ << "UPDATE files SET processing_status = ? WHERE id = ?" << to_string(processing_status) << file_id;
   } catch (const sqlite::sqlite_exception &e) {
     throw MetadataStoreError("Failed to update file processing status: " + std::string(e.what()));
   }
@@ -256,22 +149,22 @@ void MetadataStore::upsert_chunk_metadata(int file_id, const std::vector<Process
 
   try {
     // Start transaction
-    *db_ << "BEGIN TRANSACTION;";
+    db_ << "BEGIN TRANSACTION;";
 
     for (const auto &chunk : chunks) {
       // Convert vector to blob
       std::vector<char> vector_blob(chunk.chunk.vector_embedding.size() * sizeof(float));
       std::memcpy(vector_blob.data(), chunk.chunk.vector_embedding.data(), vector_blob.size());
 
-      *db_ << "REPLACE INTO chunks (file_id, chunk_index, content, vector_blob) VALUES (?, ?, ?, ?)"
+      db_ << "REPLACE INTO chunks (file_id, chunk_index, content, vector_blob) VALUES (?, ?, ?, ?)"
            << file_id << chunk.chunk.chunk_index
            << chunk.compressed_content  // Use compressed content
            << vector_blob;
     }
 
-    *db_ << "COMMIT;";
+    db_ << "COMMIT;";
   } catch (const sqlite::sqlite_exception &e) {
-    *db_ << "ROLLBACK;";
+    db_ << "ROLLBACK;";
     throw MetadataStoreError("Failed to upsert chunk metadata: " + std::string(e.what()));
   }
 }
@@ -287,7 +180,7 @@ std::vector<ChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<int> fi
     std::string sql = "SELECT id, file_id, chunk_index, content FROM chunks WHERE file_id IN (" +
                       file_ids_str + ") ORDER BY file_id, chunk_index";
 
-    *db_ << sql >> [&](int id, int file_id, int chunk_index, std::vector<char> content) {
+    db_ << sql >> [&](int id, int file_id, int chunk_index, std::vector<char> content) {
       ChunkMetadata chunk;
       chunk.id = id;
       chunk.file_id = file_id;
@@ -321,7 +214,7 @@ void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult> &chunks) 
     // Create a map to store metadata by ID
     std::unordered_map<int, std::tuple<int, int, std::vector<char>>> id_to_metadata;
 
-    *db_ << sql >> [&](int id, int file_id, int chunk_index, std::vector<char> content) {
+    db_ << sql >> [&](int id, int file_id, int chunk_index, std::vector<char> content) {
       id_to_metadata[id] = {file_id, chunk_index, std::move(content)};
     };
 
@@ -345,7 +238,7 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &
   try {
     std::optional<FileMetadata> result;
 
-    *db_ << "SELECT id, path, original_path, file_hash, processing_status, tags, "
+    db_ << "SELECT id, path, original_path, file_hash, processing_status, tags, "
             "last_modified, created_at, file_type, file_size, summary_vector_blob, "
             "suggested_category, suggested_filename FROM files WHERE path = ?"
          << path >>
@@ -394,7 +287,7 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(int id) {
   try {
     std::optional<FileMetadata> result;
 
-    *db_ << "SELECT id, path, original_path, file_hash, processing_status, tags, "
+    db_ << "SELECT id, path, original_path, file_hash, processing_status, tags, "
             "last_modified, created_at, file_type, file_size, summary_vector_blob, "
             "suggested_category, suggested_filename FROM files WHERE id = ?"
          << id >>
@@ -447,7 +340,7 @@ std::optional<ProcessingStatus> MetadataStore::file_processing_status(std::strin
   try {
     std::optional<ProcessingStatus> result;
     // Column is stored as file_hash in the schema
-    *db_ << "SELECT processing_status FROM files WHERE file_hash = ?" << content_hash >>
+    db_ << "SELECT processing_status FROM files WHERE file_hash = ?" << content_hash >>
         [&](std::string processing_status) {
           result = processing_status_from_string(processing_status);
         };
@@ -462,7 +355,7 @@ std::vector<FileMetadata> MetadataStore::list_all_files() {
   std::vector<FileMetadata> files;
 
   try {
-    *db_ << "SELECT id, path, file_hash, last_modified, created_at, file_type, file_size, "
+    db_ << "SELECT id, path, file_hash, last_modified, created_at, file_type, file_size, "
             "summary_vector_blob FROM files" >>
         [&](int id, std::string path, std::string file_hash, std::string last_modified,
             std::string created_at, std::string file_type, int64_t file_size,
@@ -493,7 +386,7 @@ std::vector<FileMetadata> MetadataStore::list_all_files() {
 
 void MetadataStore::delete_file_metadata(const std::string &path) {
   try {
-    *db_ << "DELETE FROM files WHERE path = ?" << path;
+    db_ << "DELETE FROM files WHERE path = ?" << path;
   } catch (const sqlite::sqlite_exception &e) {
     throw MetadataStoreError("Failed to delete file metadata: " + std::string(e.what()));
   }
@@ -518,7 +411,7 @@ void MetadataStore::rebuild_faiss_index() {
     int current_num_vectors = 0;
 
     // Fetch all IDs and vectors from the database
-    *db_ << "SELECT id, summary_vector_blob FROM files WHERE summary_vector_blob IS NOT NULL" >>
+    db_ << "SELECT id, summary_vector_blob FROM files WHERE summary_vector_blob IS NOT NULL" >>
         [&](int64_t id, std::vector<char> vector_blob) {
           // Validate vector size to match expected dimension
           if (vector_blob.size() == VECTOR_DIMENSION * sizeof(float)) {
@@ -601,7 +494,7 @@ std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
     std::string sql = "SELECT id, vector_blob FROM chunks WHERE file_id IN (" + file_ids_str +
                       ") ORDER BY file_id, chunk_index";
 
-    *db_ << sql >> [&](int64_t id, std::vector<char> vector_blob) {
+    db_ << sql >> [&](int64_t id, std::vector<char> vector_blob) {
       // Validate vector size to match expected dimension
       if (vector_blob.size() == VECTOR_DIMENSION * sizeof(float)) {
         faiss_ids.push_back(id);
@@ -689,144 +582,6 @@ std::string MetadataStore::int_vector_to_comma_string(const std::vector<int> &ve
   return ss.str();
 }
 
-// Task queue management functions
-
-long long MetadataStore::create_task(const std::string& task_type,
-                                     const std::string& file_path,
-                                     int priority) {
-  try {
-    auto now = std::chrono::system_clock::now();
-    std::string created_at_str = time_point_to_string(now);
-    std::string updated_at_str = created_at_str;
-
-    *db_ << "INSERT INTO task_queue (task_type, file_path, priority, created_at, updated_at) VALUES (?,?,?,?,?)"
-         << task_type << file_path << priority << created_at_str << updated_at_str;
-    
-    return static_cast<long long>(db_->last_insert_rowid());
-  } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to create task: " + std::string(e.what()));
-  }
-}
-
-std::optional<Task> MetadataStore::fetch_and_claim_next_task() {
-  try {
-    std::optional<Task> result;
-    
-    // Start transaction to ensure atomic fetch and update
-    *db_ << "BEGIN TRANSACTION;";
-    
-    // Find the highest priority pending task
-    std::string pending_status = to_string(TaskStatus::PENDING);
-    *db_ << "SELECT id, task_type, file_path, status, priority, error_message, created_at, updated_at "
-            "FROM task_queue WHERE status = ? ORDER BY priority ASC, created_at ASC LIMIT 1"
-        << pending_status >>
-        [&](long long id, std::string task_type, std::string file_path, std::string status_db, 
-            int priority, std::optional<std::string> error_message, 
-            std::string created_at, std::string updated_at) {
-          Task task;
-          task.id = id;
-          task.task_type = task_type;
-          task.file_path = file_path;
-          task.status = task_status_from_string(status_db);
-          task.priority = priority;
-          if (error_message) {
-            task.error_message = *error_message;
-          }
-          task.created_at = string_to_time_point(created_at);
-          task.updated_at = string_to_time_point(updated_at);
-          result = std::move(task);
-        };
-
-    if (result) {
-      // Mark task as PROCESSING
-      auto now = std::chrono::system_clock::now();
-      std::string updated_at_str = time_point_to_string(now);
-      std::string processing_status = to_string(TaskStatus::PROCESSING);
-      
-      *db_ << "UPDATE task_queue SET status = ?, updated_at = ? WHERE id = ?"
-           << processing_status << updated_at_str << result->id;
-      
-      result->status = TaskStatus::PROCESSING;
-      result->updated_at = now;
-    }
-    
-    *db_ << "COMMIT;";
-    return result;
-  } catch (const sqlite::sqlite_exception &e) {
-    *db_ << "ROLLBACK;";
-    throw MetadataStoreError("Failed to fetch and claim next task: " + std::string(e.what()));
-  }
-}
-
-void MetadataStore::update_task_status(long long task_id, TaskStatus new_status) {
-  try {
-    auto now = std::chrono::system_clock::now();
-    std::string updated_at_str = time_point_to_string(now);
-    std::string status_str = to_string(new_status);
-    
-    *db_ << "UPDATE task_queue SET status = ?, updated_at = ? WHERE id = ?"
-         << status_str << updated_at_str << task_id;
-  } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to update task status: " + std::string(e.what()));
-  }
-}
-
-void MetadataStore::mark_task_as_failed(long long task_id, const std::string& error_message) {
-  try {
-    auto now = std::chrono::system_clock::now();
-    std::string updated_at_str = time_point_to_string(now);
-    std::string failed_status = to_string(TaskStatus::FAILED);
-    
-    *db_ << "UPDATE task_queue SET status = ?, error_message = ?, updated_at = ? WHERE id = ?"
-         << failed_status << error_message << updated_at_str << task_id;
-  } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to mark task as failed: " + std::string(e.what()));
-  }
-}
-
-std::vector<Task> MetadataStore::get_tasks_by_status(TaskStatus status) {
-  std::vector<Task> tasks;
-  std::string status_str = to_string(status);
-  
-  try {
-    *db_ << "SELECT id, task_type, file_path, status, priority, error_message, created_at, updated_at "
-            "FROM task_queue WHERE status = ? ORDER BY priority ASC, created_at ASC"
-         << status_str >>
-        [&](long long id, std::string task_type, std::string file_path, std::string status_db, 
-            int priority, std::optional<std::string> error_message, 
-            std::string created_at, std::string updated_at) {
-          Task task;
-          task.id = id;
-          task.task_type = task_type;
-          task.file_path = file_path;
-          task.status = task_status_from_string(status_db);
-          task.priority = priority;
-          if (error_message) {
-            task.error_message = *error_message;
-          }
-          task.created_at = string_to_time_point(created_at);
-          task.updated_at = string_to_time_point(updated_at);
-          tasks.push_back(std::move(task));
-        };
-  } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to get tasks by status: " + std::string(e.what()));
-  }
-  
-  return tasks;
-}
-
-void MetadataStore::clear_completed_tasks(int older_than_days) {
-  try {
-    auto cutoff_time = std::chrono::system_clock::now() - std::chrono::hours(24 * older_than_days);
-    std::string cutoff_str = time_point_to_string(cutoff_time);
-    std::string completed_status = to_string(TaskStatus::COMPLETED);
-    std::string failed_status = to_string(TaskStatus::FAILED);
-    
-    *db_ << "DELETE FROM task_queue WHERE status IN (?, ?) AND updated_at <= ?"
-         << completed_status << failed_status << cutoff_str;
-  } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to clear completed tasks: " + std::string(e.what()));
-  }
-}
+// Task queue methods removed from MetadataStore in repository refactor
 
 }  // namespace magic_core
