@@ -7,7 +7,7 @@ namespace magic_core {
 class PlainTextExtractor : public ContentExtractor {
 public:
     bool can_handle(const fs::path& file_path) const override;
-
+    FileType get_file_type() const override;
     std::vector<Chunk> get_chunks(const fs::path& file_path) const override;
     
     ExtractionResult extract_with_hash(const fs::path& file_path) const override;

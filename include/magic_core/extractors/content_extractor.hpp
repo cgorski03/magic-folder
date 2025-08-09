@@ -26,7 +26,6 @@ class ContentExtractorError : public std::exception {
 struct ExtractionResult {
   std::string content_hash;
   std::vector<Chunk> chunks;
-  FileType file_type;
 };
 
 class ContentExtractor {
@@ -43,7 +42,8 @@ class ContentExtractor {
   virtual ExtractionResult extract_with_hash(const fs::path& file_path) const = 0;
 
   std::string get_content_hash(const fs::path& file_path) const;
-  
+
+  virtual FileType get_file_type() const;
   protected:
   // Helper method for derived classes to compute hash from loaded content
   std::string get_string_content(const fs::path& file_path) const;
