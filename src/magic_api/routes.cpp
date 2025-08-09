@@ -7,16 +7,19 @@
 #include "magic_core/services/file_info_service.hpp"
 #include "magic_core/services/file_processing_service.hpp"
 #include "magic_core/services/search_service.hpp"
+#include "magic_core/async/worker.hpp"
 
 namespace magic_api {
 Routes::Routes(std::shared_ptr<magic_core::FileProcessingService> file_processing_service,
                std::shared_ptr<magic_core::FileDeleteService> file_delete_service,
                std::shared_ptr<magic_core::FileInfoService> file_info_service,
-               std::shared_ptr<magic_core::SearchService> search_service)
+               std::shared_ptr<magic_core::SearchService> search_service,
+               std::shared_ptr<magic_core::async::Worker> worker)
     : file_processing_service_(file_processing_service),
       file_delete_service_(file_delete_service),
       file_info_service_(file_info_service),
-      search_service_(search_service) {}
+      search_service_(search_service),
+      worker_(worker) {}
 
 void Routes::register_routes(Server &server) {
   auto &app = server.get_app();
@@ -70,14 +73,23 @@ crow::response Routes::handle_process_file(const crow::request &req) {
   try {
     std::string file_path = extract_file_path_from_request(req);
     std::cout << "Processing file: " << file_path << std::endl;
-    magic_core::ProcessFileResult result = file_processing_service_->process_file(file_path);
-    if (!result.success) {
-      std::cout << "Processing file failed: " << file_path << std::endl;
-      return create_json_response(create_error_response(result.error_message), 400);
+    // Request processing to add task to queue
+    std::optional<long long> task_id = file_processing_service_->request_processing(file_path);
+    if (!task_id.has_value()) {
+      std::cout << "File already being processed: " << file_path << std::endl;
+      return create_json_response(create_error_response("File already being processed"), 400);
     }
-    nlohmann::json response = create_success_response("File processed successfully");
-
-    return create_json_response(response);
+    
+    // Process the task synchronously using the worker
+    bool task_processed = worker_->run_one_task();
+    
+    if (task_processed) {
+      nlohmann::json response = create_success_response("File processed successfully");
+      return create_json_response(response);
+    } else {
+      std::cout << "No task found to process for: " << file_path << std::endl;
+      return create_json_response(create_error_response("Task was queued but could not be processed immediately"), 500);
+    }
   } catch (const std::exception &e) {
     std::cerr << "Exception in handle_process_file: " << e.what() << std::endl;
     nlohmann::json error_response = create_error_response(e.what());
