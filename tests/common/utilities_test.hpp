@@ -73,7 +73,9 @@ class MetadataStoreTestBase : public ::testing::Test {
  protected:
   void SetUp() override {
     temp_db_path_ = TestUtilities::create_temp_test_db();
-    db_manager_ = std::make_shared<magic_core::DatabaseManager>(temp_db_path_);
+    // Use a deterministic test key for SQLCipher-enabled databases
+    const std::string test_db_key = "magic_folder_test_key";
+    db_manager_ = std::make_shared<magic_core::DatabaseManager>(temp_db_path_, test_db_key);
     metadata_store_ = std::make_shared<magic_core::MetadataStore>(*db_manager_);
     task_queue_repo_ = std::make_shared<magic_core::TaskQueueRepo>(*db_manager_);
   }
