@@ -75,10 +75,10 @@ Magic Folder C++ is a C++ implementation that automatically processes files, gen
   - [x] Store chunk-level vectors
   - [x] Add content hashing for chunks
 
-- [ ] **Create `TaskQueue` table**
-  - [ ] Implement task status tracking
-  - [ ] Add priority and error handling
-  - [ ] Support task retry logic
+- [x] **Create `TaskQueue` table**
+  - [x] Implement task status tracking
+  - [x] Add priority and error handling
+  - [x] Support task retry logic
 #### 1.25 Data Storage Optimization
 - [x] **Encode `content` blob**
   - [x] Setup zstd library integration
@@ -105,29 +105,29 @@ Magic Folder C++ is a C++ implementation that automatically processes files, gen
 ### Phase 2: Worker Pool Architecture (Priority 2)
 
 #### 2.1 Async Infrastructure
-- [ ] **Create `Worker.h` interface**
-  - [ ] Define worker thread lifecycle
-  - [ ] Add task processing interface
+- [x] **Create `Worker.h` interface**
+  - [x] Define worker thread lifecycle
+  - [x] Add task processing interface
   - [ ] Implement error handling and recovery
   - [ ] Add worker health monitoring
 
-- [ ] **Implement `WorkerPool.h`**
+- [x] **Implement `WorkerPool.h`**
   - [ ] Create thread pool management
   - [ ] Add load balancing logic
-  - [ ] Implement graceful shutdown
-  - [ ] Add worker pool configuration
+  - [x] Implement graceful shutdown
+  - [x] Add worker pool configuration
 
-- [ ] **Database Integration**
-  - [ ] Create `DatabaseManager.h` for connection pooling
-  - [ ] Implement `TaskQueue.h` for job management
+- [x] **Database Integration**
+  - [x] Create `DatabaseManager.h` for connection pooling
+  - [x] Implement `TaskQueue.h` for job management
   - [ ] Add transaction handling
   - [ ] Implement connection retry logic
 
 #### 2.2 Background Processing
-- [ ] **Task Processing Pipeline**
-  - [ ] Implement task polling mechanism
-  - [ ] Add task status updates
-  - [ ] Create error handling and retry logic
+- [x] **Task Processing Pipeline**
+  - [x] Implement task polling mechanism
+  - [x] Add task status updates
+  - [x] Create error handling and retry logic
   - [ ] Add progress tracking
 
 - [ ] **File System Integration**

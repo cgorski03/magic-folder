@@ -19,7 +19,7 @@
 
 int main() {
   try {
-    Config config = Config::from_environment();
+    Config config = Config::from_file("magicrc.json");
 
     std::string server_url = config.api_base_url;
     std::string metadata_path = config.metadata_db_path;
