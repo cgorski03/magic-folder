@@ -53,8 +53,6 @@ MetadataStore::~MetadataStore() {
 
 void MetadataStore::initialize() { rebuild_faiss_index(); }
 
-// Tables/migrations are managed by DatabaseManager
-
 /*
 This upserts a file stub. If the file already exists, it will update the file.
 This is used to create a file stub while the file is being processed.

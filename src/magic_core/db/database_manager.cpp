@@ -1,21 +1,41 @@
+#define SQLITE_HAS_CODEC 1
+#define SQLCIPHER_CRYPTO_OPENSSL 1
 #include "magic_core/db/database_manager.hpp"
 
-#include <filesystem>
+
 
 namespace magic_core {
 
-DatabaseManager::DatabaseManager(const std::filesystem::path& db_path) {
-  std::filesystem::create_directories(db_path.parent_path());
-  open_database(db_path);
-  run_pragmas();
-  create_tables();
+DatabaseManager::DatabaseManager(const std::filesystem::path& db_path, const std::string& db_key) {
+  try {
+    std::filesystem::create_directories(db_path.parent_path());
+    open_database(db_path, db_key);
+    run_pragmas();
+    create_tables();
+
+  } catch (const DatabaseManagerException& e) {
+    std::cerr << "DatabaseManagerException: " << e.what() << std::endl;
+    throw;
+  }
 }
 
-sqlite::database& DatabaseManager::get_db() { return *db_; }
+sqlite::database& DatabaseManager::get_db() {
+  return *db_;
+}
 
-void DatabaseManager::open_database(const std::filesystem::path& db_path) {
+void DatabaseManager::open_database(const std::filesystem::path& db_path,
+                                    const std::string& db_key) {
   db_ = std::make_unique<sqlite::database>(db_path.string());
-  // Touch sqlite_master to ensure DB is open
+  sqlite3* handle = db_->connection().get();
+  if (!handle) {
+    throw DatabaseManagerException("Failed to get native database handle after opening.");
+  }
+
+  if (sqlite3_key(handle, db_key.c_str(), db_key.length()) != SQLITE_OK) {
+    std::string error_msg = sqlite3_errmsg(handle);
+    throw DatabaseManagerException("Failed to key database: " + error_msg);
+  }
+
   *db_ << "SELECT count(*) FROM sqlite_master;";
 }
 
@@ -76,5 +96,3 @@ void DatabaseManager::create_tables() {
 }
 
 }  // namespace magic_core
-
-

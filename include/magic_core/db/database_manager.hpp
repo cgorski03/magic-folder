@@ -1,9 +1,17 @@
 #pragma once
+#define SQLITE_HAS_CODEC 1
+#define SQLCIPHER_CRYPTO_OPENSSL 1
 #include <filesystem>
 #include <memory>
+
+#include <sqlcipher/sqlite3.h>
 #include <sqlite_modern_cpp.h>
 
 namespace magic_core {
+class DatabaseManagerException : public std::runtime_error {
+ public:
+  explicit DatabaseManagerException(const std::string& message) : std::runtime_error(message) {}
+};
 
 /**
  * DatabaseManager owns the SQLite connection (SQLCipher-enabled), applies the
@@ -11,7 +19,7 @@ namespace magic_core {
  */
 class DatabaseManager {
  public:
-  explicit DatabaseManager(const std::filesystem::path& db_path);
+  explicit DatabaseManager(const std::filesystem::path& db_path, const std::string& db_key);
   ~DatabaseManager() = default;
 
   // Non-copyable, movable
@@ -23,7 +31,7 @@ class DatabaseManager {
   sqlite::database& get_db();
 
  private:
-  void open_database(const std::filesystem::path& db_path);
+  void open_database(const std::filesystem::path& db_path, const std::string& db_key);
   void run_pragmas();
   void create_tables();
 
