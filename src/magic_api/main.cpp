@@ -13,18 +13,19 @@
 #include "magic_core/services/file_info_service.hpp"
 #include "magic_core/services/file_processing_service.hpp"
 #include "magic_core/services/search_service.hpp"
+#include "magic_core/services/encryption_key_service.hpp"
 #include "magic_core/extractors/content_extractor_factory.hpp"
 #include "magic_core/async/worker_pool.hpp"
 
 int main() {
   try {
-    Config config = Config::from_environment();
+    Config config = Config::from_file("magicrc.json");
 
     std::string server_url = config.api_base_url;
     std::string metadata_path = config.metadata_db_path;
     std::string ollama_server_url = config.ollama_url;
     std::string model = config.embedding_model;
-    // DB key no longer needed for DatabaseManager constructor in this refactor
+    std::string db_key = magic_core::EncryptionKeyService::get_database_key();
     std::cout << "Starting Magic Folder API Server..." << std::endl;
     std::cout << "Server URL: " << server_url << std::endl;
     std::cout << "Metadata DB Path: " << metadata_path << std::endl;
@@ -33,7 +34,7 @@ int main() {
 
     // Initialize core components
     auto ollama_client = std::make_shared<magic_core::OllamaClient>(ollama_server_url, model);
-    auto db_manager = std::make_shared<magic_core::DatabaseManager>(metadata_path);
+    auto db_manager = std::make_shared<magic_core::DatabaseManager>(metadata_path, db_key);
     auto metadata_store = std::make_shared<magic_core::MetadataStore>(*db_manager);
     auto task_queue_repo = std::make_shared<magic_core::TaskQueueRepo>(*db_manager);
     auto content_extractor_factory = std::make_shared<magic_core::ContentExtractorFactory>();

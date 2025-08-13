@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <sqlite_modern_cpp.h>
 #include <string>
+#include <memory>
 #include <vector>
 
 #include "../../common/utilities_test.hpp"
@@ -38,6 +39,19 @@ TEST_F(DatabaseManagerTest, HasIndexesAndPragmas_Applied) {
   int fk_on = 0;
   db << "PRAGMA foreign_keys;" >> fk_on;
   EXPECT_EQ(fk_on, 1);
+}
+
+TEST_F(DatabaseManagerTest, ReopenWithWrongKey_Fails) {
+  // Ensure DB is created and written with the correct key in SetUp
+  // Now close it and try to reopen with a wrong key
+  db_manager_.reset();
+
+  const std::string wrong_key = "incorrect_test_key";
+  EXPECT_THROW({
+                  auto bad_manager = std::make_shared<DatabaseManager>(temp_db_path_, wrong_key);
+                  (void)bad_manager;
+                },
+                std::exception);
 }
 
 }  // namespace magic_core

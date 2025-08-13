@@ -1,0 +1,7 @@
+{
+  "api_base_url": "127.0.0.1:3030",
+  "metadata_db_path": "./data/metadata.db",
+  "ollama_url": "http://localhost:11434",
+  "embedding_model": "mxbai-embed-large",
+  "num_workers": 2
+}

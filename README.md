@@ -4,8 +4,8 @@ An intelligent file management system leveraging locally-run LLMs and embedding 
 
 ## Project Status: MVP with Roadmap
 
-**Current State**: Basic file indexing and semantic search working with single-file processing
-**Next Phase**: Advanced chunking system with worker pools for scalable processing
+**Current State**: Chunked file indexing (Markdown + Plaintext), zstd-compressed chunk storage, SQLCipher-encrypted SQLite, FAISS-backed two-stage search (files + chunks), background Worker + WorkerPool processing via task queue, REST API + CLI working against a live Ollama server
+**Next Phase**: File watching, worker health/metrics, background index maintenance, PDF extractor
 
 ## Architecture Overview
 
@@ -19,21 +19,23 @@ Magic Folder C++ is a C++ implementation that automatically processes files, gen
 
 ### Current MVP Features 
 
-- Basic file content extraction (text, markdown, code files)
-- Content hashing for change detection
+- Chunked content extraction for Markdown and Plaintext
+- Content hashing for change detection (single read: hash + chunks)
 - Embedding generation via Ollama (`mxbai-embed-large`)
-- SQLite metadata storage with FAISS vector search
-- REST API endpoints for file processing and search
-- CLI interface for system interaction
-- Comprehensive test coverage
+- SQLCipher-encrypted SQLite metadata store (macOS keychain-backed key)
+- zstd compression of chunk content at rest
+- FAISS in-memory index for file-level search; on-demand FAISS for chunk search
+- Background processing pipeline: task queue + worker threads (`Worker`, `WorkerPool`)
+- REST API endpoints for processing and search (file-only and combined)
+- CLI for process/search/list
+- Comprehensive unit tests with mocks
 
 ### Next Phase Features 
 
-- **Advanced Chunking System**: Multi-level content chunking with semantic boundaries
-- **Worker Pool Architecture**: Asynchronous background processing
-- **Task Queue System**: Reliable job processing with retry logic
-- **Enhanced Search**: Two-stage search (file-level + chunk-level)
-- **File Watching**: Real-time file system monitoring
+- **Advanced Chunking System**: Additional extractors (e.g., code-aware, PDFs)
+- **Worker Health + Metrics**: Monitoring, backoff, instrumentation
+- **Index Maintenance**: Background rebuild/compaction
+- **File Watching**: Real-time file system monitoring and auto-enqueue
 
 ## Development Roadmap
 
@@ -75,18 +77,18 @@ Magic Folder C++ is a C++ implementation that automatically processes files, gen
   - [x] Store chunk-level vectors
   - [x] Add content hashing for chunks
 
-- [ ] **Create `TaskQueue` table**
-  - [ ] Implement task status tracking
-  - [ ] Add priority and error handling
-  - [ ] Support task retry logic
+- [x] **Create `TaskQueue` table**
+  - [x] Implement task status tracking
+  - [x] Add priority and error handling
+  - [x] Support task retry logic
 #### 1.25 Data Storage Optimization
 - [x] **Encode `content` blob**
   - [x] Setup zstd library integration
   - [x] Implement encoding in the content blob field for the chunks
 
 - [x] **Encrypt Data at rest**
-  - [x] Implement class for handling encryption key at OS level
-  - [x] Migrate database to use sqlite-modern and eliminate boilerplate
+  - [x] Implement OS-backed key management (macOS Keychain)
+  - [x] Migrate database to `sqlite-modern-cpp`
   - [x] Migrate database to SQLCipher
 
 #### 1.3 Search System Enhancement
@@ -105,29 +107,28 @@ Magic Folder C++ is a C++ implementation that automatically processes files, gen
 ### Phase 2: Worker Pool Architecture (Priority 2)
 
 #### 2.1 Async Infrastructure
-- [ ] **Create `Worker.h` interface**
-  - [ ] Define worker thread lifecycle
-  - [ ] Add task processing interface
-  - [ ] Implement error handling and recovery
+- [x] **Create `Worker.h` interface**
+  - [x] Define worker thread lifecycle
+  - [x] Add task processing interface
+  - [x] Implement error handling and recovery
   - [ ] Add worker health monitoring
 
-- [ ] **Implement `WorkerPool.h`**
-  - [ ] Create thread pool management
-  - [ ] Add load balancing logic
-  - [ ] Implement graceful shutdown
-  - [ ] Add worker pool configuration
+- [x] **Implement `WorkerPool.h`**
+  - [x] Thread pool management
+  - [x] Graceful shutdown coordination
+  - [x] Configurable worker count (via `magicrc.json`)
 
-- [ ] **Database Integration**
-  - [ ] Create `DatabaseManager.h` for connection pooling
-  - [ ] Implement `TaskQueue.h` for job management
-  - [ ] Add transaction handling
+- [x] **Database Integration**
+  - [x] Create `DatabaseManager.h` for connection pooling
+  - [x] Implement `TaskQueue.h` for job management
+  - [x] Add transaction handling
   - [ ] Implement connection retry logic
 
 #### 2.2 Background Processing
-- [ ] **Task Processing Pipeline**
-  - [ ] Implement task polling mechanism
-  - [ ] Add task status updates
-  - [ ] Create error handling and retry logic
+- [x] **Task Processing Pipeline**
+  - [x] Implement task polling mechanism
+  - [x] Add task status updates
+  - [x] Create error handling and retry logic
   - [ ] Add progress tracking
 
 - [ ] **File System Integration**
@@ -184,74 +185,63 @@ ollama serve
 ```
 
 4. **Dependencies**:
-   - libcurl (HTTP client)
+   - curl (HTTP client)
    - nlohmann-json (JSON parsing)
-   - sqlite3 (Database)
-   - OpenSSL (Cryptographic functions)
-   - FAISS (Vector similarity search)
+   - sqlite (builds against SQLCipher)
+   - SQLCipher (encrypted SQLite)
+   - FAISS (vector similarity search)
+   - zstd (chunk compression)
+   - crow (HTTP server)
 
 ### Installation
 
 #### Ubuntu/Debian
 ```bash
 sudo apt update
-sudo apt install build-essential cmake libcurl4-openssl-dev nlohmann-json3-dev libsqlite3-dev libssl-dev
+sudo apt install -y build-essential cmake libcurl4-openssl-dev nlohmann-json3-dev libsqlcipher-dev libfaiss-dev libzstd-dev
 ```
 
 #### macOS
 ```bash
 # Using Homebrew
-brew install cmake curl nlohmann-json sqlite openssl
+brew install cmake curl nlohmann-json sqlcipher faiss zstd
 
-# Using MacPorts
-sudo port install cmake curl nlohmann-json sqlite3 openssl
+# Optional: vcpkg for C++ dependencies
+# https://learn.microsoft.com/vcpkg/get_started/get-started
 ```
 
 #### Windows
 ```bash
 # Using vcpkg
-vcpkg install curl nlohmann-json sqlite3 openssl faiss
+vcpkg install curl nlohmann-json sqlite3 faiss zstd crow
 ```
 
 ### Building
 
 ```bash
-# Clone and navigate
-cd magic-folder-cpp
-
-# Create build directory
+# From repo root
 mkdir build && cd build
-
-# Configure and build
 cmake ..
-make -j$(nproc)  # Linux/macOS
-# or
-cmake --build . --config Release  # Windows
+cmake --build . -j
 ```
 
 ## ⚙️ Configuration
 
-Create a `.env` file in the project root:
+Create a `magicrc.json` in the project root (read at server startup):
 
-```bash
-# API Configuration
-API_BASE_URL=127.0.0.1:3030
-
-# Database Paths
-VECTOR_DB_PATH=./data/vector_db
-METADATA_DB_PATH=./data/metadata.db
-
-# Ollama Configuration
-OLLAMA_URL=http://localhost:11434
-EMBEDDING_MODEL=mxbai-embed-large
-
-# Worker Pool Configuration
-WORKER_POOL_SIZE=4
-TASK_QUEUE_POLL_INTERVAL=1000
-
-# File Watching
-WATCHED_FOLDER=./watched_files
+```json
+{
+  "api_base_url": "127.0.0.1:3030",
+  "metadata_db_path": "./data/metadata.db",
+  "ollama_url": "http://localhost:11434",
+  "embedding_model": "mxbai-embed-large",
+  "num_workers": 4
+}
 ```
+
+Notes:
+- The server uses SQLCipher with a key fetched from the OS keychain (macOS only). On non-macOS platforms the server will currently throw when requesting the key.
+- The CLI reads `API_BASE_URL` from the environment (default: `http://127.0.0.1:3030`).
 
 ## Usage
 
@@ -262,184 +252,87 @@ WATCHED_FOLDER=./watched_files
 ./bin/magic_api
 ```
 
-The server starts on `http://localhost:3030` with background worker pools.
+The server starts on `http://localhost:3030` (or your configured host:port) and launches a `WorkerPool` of `num_workers` threads to process tasks from the queue.
 
 ### 2. Use the CLI
 
-**Process a file**:
+Environment (optional):
 ```bash
-./bin/magic_cli process --file path/to/your/file.txt
+export API_BASE_URL=http://127.0.0.1:3030
 ```
 
-**Search for files**:
-```bash
-./bin/magic_cli search --query "your search query" --top-k 5
-```
-
-**List all files**:
-```bash
-./bin/magic_cli list
-```
-
-**Check system status**:
-```bash
-./bin/magic_cli status
-```
+Commands:
+- Process a file:
+  ```bash
+  ./bin/magic_cli process --file /path/to/file.txt
+  ```
+- Magic search (files + chunks):
+  ```bash
+  ./bin/magic_cli search --query "your query" --top-k 5
+  ```
+- File-only search:
+  ```bash
+  ./bin/magic_cli filesearch --query "your query" --top-k 5
+  ```
+- List all files:
+  ```bash
+  ./bin/magic_cli list
+  ```
 
 ### 3. API Endpoints
 
 - `GET /` - Health check
-- `POST /process_file` - Process a file for indexing
-- `POST /search` - Search for files using semantic search
+- `POST /process_file` - Queue a file for processing
+- `POST /search` - Magic search: returns top-k files and top-k chunks (with decompressed content)
+- `POST /files/search` - File-only search
 - `GET /files` - List all indexed files
-- `GET /files/{path}` - Get information about a specific file
-- `DELETE /files/{path}` - Delete a file from the index
-- `GET /status` - Get system status and worker pool info
+- `GET /files/{path}` - Get file info (placeholder response for now)
+- `DELETE /files/{path}` - Delete file (placeholder)
 
 ## 📁 Project Structure
 
-### Current Structure (MVP)
-
 ```
-magic-folder-cpp/
-├── .env                      # Configuration (DB paths, Ollama URL, worker count)
-├── .gitignore                # Files to ignore for version control
-├── CMakeLists.txt            # Root CMake file
-├── LICENSE                   # Project license
-├── README.md                 # This file
-├── SystemDesignDiagrams.md   # System architecture diagrams
-├── TESTING.md                # Testing documentation
-├── vcpkg.json                # Package dependencies
-├── build.sh                  # Build script
-├── run_tests.sh              # Test runner script
-│
-├── data/                     # Runtime data (gitignored)
-│   └── metadata.db           # SQLite database
-│
-├── include/                  # PUBLIC HEADERS
-│   ├── magic_core/           # Core library headers
-│   │   ├── content_extractor.hpp    # Content extraction interface
-│   │   ├── metadata_store.hpp       # Database and vector storage
-│   │   ├── ollama_client.hpp        # Ollama API client
-│   │   ├── types.hpp                # Core type definitions
-│   │   └── file_watcher.hpp         # File system monitoring
-│   │
-│   ├── magic_api/            # API server headers
-│   │   ├── config.hpp        # Server configuration
-│   │   ├── routes.hpp        # HTTP route handlers
-│   │   └── server.hpp        # Server interface
-│   │
-│   ├── magic_services/       # Service layer headers
-│   │   ├── file_processing_service.hpp  # File processing orchestration
-│   │   ├── search_service.hpp           # Semantic search service
-│   │   ├── file_info_service.hpp       # File metadata service
-│   │   ├── file_delete_service.hpp     # File deletion service
-│   │   └── background/                 # Background processing
-│   │
-│   └── magic_cli/            # CLI headers
-│       └── cli_handler.hpp   # Command-line interface
-│
-├── src/                      # IMPLEMENTATION
-│   ├── magic_core/           # Core library implementation
-│   │   ├── content_extractor.cpp      # Content extraction logic
-│   │   ├── metadata_store.cpp         # Database operations
-│   │   ├── ollama_client.cpp          # Ollama API implementation
-│   │   ├── types.cpp                  # Type implementations
-│   │   ├── file_watcher.cpp           # File system monitoring
-│   │   └── CMakeLists.txt
-│   │
-│   ├── magic_api/            # API server executable
-│   │   ├── main.cpp          # Server entry point
-│   │   ├── server.cpp        # Server implementation
-│   │   ├── routes.cpp        # HTTP endpoint handlers
-│   │   └── CMakeLists.txt
-│   │
-│   ├── magic_services/       # Service layer implementation
-│   │   ├── file_processing_service.cpp # File processing logic
-│   │   ├── search_service.cpp         # Search implementation
-│   │   ├── file_info_service.cpp      # File metadata operations
-│   │   ├── file_delete_service.cpp    # File deletion logic
-│   │   └── CMakeLists.txt
-│   │
-│   └── magic_cli/            # CLI executable
-│       ├── main.cpp          # CLI entry point
-│       ├── cli_handler.cpp   # CLI command handling
-│       └── CMakeLists.txt
-│
-├── tests/                    # Unit and integration tests
-│   ├── test_file_processing_service.cpp # File processing tests
-│   ├── test_search_service.cpp         # Search functionality tests
-│   ├── test_file_delete_service.cpp    # File deletion tests
-│   ├── test_file_info_service.cpp      # File info tests
-│   ├── test_utilities.cpp              # Utility function tests
-│   ├── test_mocks.hpp                  # Mock objects for testing
-│   ├── test_utilities.hpp              # Test utilities
-│   ├── test_main.cpp                   # Test entry point
-│   └── CMakeLists.txt
-│
-├── third_party/              # Third-party dependencies
-└── build/                    # Build output directory
+magic-folder/
+├── README.md
+├── CMakeLists.txt
+├── vcpkg.json
+├── build.sh
+├── run_tests.sh
+├── magicrc.json                 # JSON config (server)
+├── data/                        # Runtime data (gitignored)
+│   └── metadata.db
+├── include/
+│   ├── magic_api/
+│   │   ├── config.hpp
+│   │   ├── routes.hpp
+│   │   └── server.hpp
+│   ├── magic_cli/
+│   │   └── cli_handler.hpp
+│   └── magic_core/
+│       ├── async/               # Worker + pool
+│       ├── db/                  # SQLCipher + schema + repos
+│       ├── extractors/          # Markdown, Plaintext, Factory
+│       ├── llm/                 # Ollama client
+│       ├── services/            # File/Search/Info/Delete
+│       └── types/               # Chunk, File
+├── src/
+│   ├── magic_api/               # main.cpp, routes.cpp, server.cpp
+│   ├── magic_cli/               # main.cpp, cli_handler.cpp
+│   └── magic_core/              # implementations for include/
+└── tests/
+    ├── unit/
+    ├── common/
+    └── test_main.cpp
 ```
-
-### Future Structure (Phase 1+)
-
-The core will be enhanced with the following structure:
-
-```
-include/magic_core/
-├── async/
-│   ├── Worker.h              # Worker thread interface
-│   └── WorkerPool.h          # Worker pool management
-├── db/
-│   ├── DatabaseManager.h     # SQLite connection management
-│   └── TaskQueue.h           # Task queue interface
-├── extractors/
-│   ├── ContentExtractor.h    # Abstract base class
-│   ├── ContentExtractorFactory.h # Factory pattern
-│   ├── MarkdownExtractor.h   # Markdown-specific extractor
-│   └── PlainTextExtractor.h  # Fallback extractor
-├── llm/
-│   └── OllamaClient.h        # Ollama API client
-└── Chunk.h                   # Chunk data structure
-```
-
-This future structure will be implemented during Phase 1 of the development roadmap.
-
-## 🔧 Development Status
-
-### ✅ Completed (MVP)
-- Basic project structure and CMake configuration
-- Core component interfaces and implementations
-- CLI argument parsing and API communication
-- SQLite metadata storage with FAISS integration
-- Content extraction for text files
-- HTTP client implementation using libcurl
-- Comprehensive test coverage
-
-### 🚧 In Progress (Phase 1)
-- Content extractor refactoring with chunking system
-- Database schema updates for chunks and task queue
-- Two-stage search implementation
-- Memory index management
-
-### ❌ Not Yet Implemented
-- Worker pool architecture (Phase 2)
-- Advanced file watching (Phase 2)
-- PDF content extraction (Phase 3)
-- Async operations (Phase 2)
-- Performance optimizations (Phase 3)
 
 ## 🧪 Testing
 
-Run the test suite:
+See detailed instructions in TESTING.md. Run the test suite:
 
 ```bash
-# From build directory
-./bin/run_tests
-
-# Or run specific tests
-./bin/test_chunking
-./bin/test_db
+# From repo root
+export VCPKG_ROOT=/path/to/vcpkg  # required by run_tests.sh
+./run_tests.sh
 ```
 
 ## 🤝 Contributing
@@ -475,10 +368,11 @@ This project is licensed under the MIT License
 ### Common Issues
 
 1. **Ollama not running**: Start with `ollama serve`
-2. **Missing dependencies**: Install all required libraries
+2. **Missing FAISS/SQLCipher**: Install dev packages (see prerequisites)
 3. **Build errors**: Ensure C++20 compiler and CMake 3.20+
-4. **Permission errors**: Check write permissions for data directory
-5. **Port conflicts**: Change API_BASE_URL in .env file
+4. **Permission errors**: Check write permissions for `data/`
+5. **Port conflicts**: Change `api_base_url` in `magicrc.json`
+6. **Non-macOS server startup**: Server requires macOS Keychain for DB key; non-macOS not yet supported for server runtime
 
 ### Debug Mode
 
@@ -496,5 +390,3 @@ export MAGIC_FOLDER_LOG_LEVEL=DEBUG
 - **Storage**: ~1KB per file metadata + ~4KB per chunk vector
 
 ---
-
-**Next Steps**: Start with Phase 1 - Content Extractor Refactoring to implement the chunking system foundation.

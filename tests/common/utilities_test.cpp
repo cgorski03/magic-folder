@@ -187,9 +187,8 @@ int TestUtilities::create_complete_file_in_store(
     for (const auto& chunk : chunks) {
       magic_core::ProcessedChunk processed_chunk;
       processed_chunk.chunk = chunk;
-      // Use mock compressed content for testing (not actual compression)
-      std::string mock_compressed = "compressed_" + chunk.content;
-      processed_chunk.compressed_content = std::vector<char>(mock_compressed.begin(), mock_compressed.end());
+      // Store plain content; tests inject a no-op decompressor in SearchService
+      processed_chunk.compressed_content = std::vector<char>(chunk.content.begin(), chunk.content.end());
       processed_chunks.push_back(std::move(processed_chunk));
     }
     

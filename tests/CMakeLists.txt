@@ -27,6 +27,7 @@ set(ALL_TEST_SOURCES
     unit/db/metadata_store_test.cpp
     unit/db/file_info_service_test.cpp
     unit/db/file_delete_service_test.cpp
+    unit/api/config_test.cpp
 )
 
 # Create the main test executable
