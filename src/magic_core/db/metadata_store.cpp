@@ -8,6 +8,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
+#include "magic_core/db/transaction.hpp"
+#include "magic_core/db/sqlite_error_utils.hpp"
 
 namespace magic_core {
 
@@ -64,6 +66,9 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
     std::string last_modified_str = time_point_to_string(basic_metadata.last_modified);
     std::string created_at_str = time_point_to_string(basic_metadata.created_at);
 
+    int result_id = -1;
+    Transaction tx(db_, /*immediate*/ true);
+
     // Check if file exists BEFORE doing the upsert
     int existing_id = -1;
     db_ << "SELECT id FROM files WHERE path = ?" << basic_metadata.path >>
@@ -79,7 +84,7 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
            << to_string(basic_metadata.processing_status) << basic_metadata.tags << last_modified_str
            << to_string(basic_metadata.file_type) << static_cast<int64_t>(basic_metadata.file_size)
            << basic_metadata.path;
-      return existing_id;
+      result_id = existing_id;
     } else {
       // File doesn't exist, insert new
       db_ << "INSERT INTO files (path, original_path, file_hash, processing_status, tags, "
@@ -88,10 +93,13 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
            << to_string(basic_metadata.processing_status) << basic_metadata.tags << last_modified_str
            << created_at_str << to_string(basic_metadata.file_type)
            << static_cast<int64_t>(basic_metadata.file_size);
-      return static_cast<int>(db_.last_insert_rowid());
+      result_id = static_cast<int>(db_.last_insert_rowid());
     }
+
+    tx.commit();
+    return result_id;
   } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to upsert file stub: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("upsert_file_stub", e));
   }
 }
 
@@ -129,7 +137,7 @@ void MetadataStore::update_file_ai_analysis(int file_id,
            << suggested_category << suggested_filename << to_string(processing_status) << file_id;
     }
   } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to update file AI analysis: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("update_file_ai_analysis", e));
   }
 }
 
@@ -137,7 +145,7 @@ void MetadataStore::update_file_processing_status(int file_id, ProcessingStatus 
   try {
     db_ << "UPDATE files SET processing_status = ? WHERE id = ?" << to_string(processing_status) << file_id;
   } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to update file processing status: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("update_file_processing_status", e));
   }
 }
 
@@ -146,24 +154,18 @@ void MetadataStore::upsert_chunk_metadata(int file_id, const std::vector<Process
     return;
 
   try {
-    // Start transaction
-    db_ << "BEGIN TRANSACTION;";
-
+    Transaction tx(db_, /*immediate*/ true);
     for (const auto &chunk : chunks) {
-      // Convert vector to blob
       std::vector<char> vector_blob(chunk.chunk.vector_embedding.size() * sizeof(float));
       std::memcpy(vector_blob.data(), chunk.chunk.vector_embedding.data(), vector_blob.size());
-
       db_ << "REPLACE INTO chunks (file_id, chunk_index, content, vector_blob) VALUES (?, ?, ?, ?)"
            << file_id << chunk.chunk.chunk_index
-           << chunk.compressed_content  // Use compressed content
+           << chunk.compressed_content
            << vector_blob;
     }
-
-    db_ << "COMMIT;";
+    tx.commit();
   } catch (const sqlite::sqlite_exception &e) {
-    db_ << "ROLLBACK;";
-    throw MetadataStoreError("Failed to upsert chunk metadata: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("upsert_chunk_metadata", e));
   }
 }
 
@@ -187,7 +189,7 @@ std::vector<ChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<int> fi
       chunks.push_back(std::move(chunk));
     };
   } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to get chunk metadata: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("get_chunk_metadata", e));
   }
 
   return chunks;
@@ -228,7 +230,7 @@ void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult> &chunks) 
       }
     }
   } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to fill chunk metadata: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("fill_chunk_metadata", e));
   }
 }
 
@@ -277,7 +279,7 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &
 
     return result;
   } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to get file metadata: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("get_file_metadata_by_path", e));
   }
 }
 
@@ -326,7 +328,7 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(int id) {
 
     return result;
   } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to get file metadata by ID: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("get_file_metadata_by_id", e));
   }
 }
 
@@ -344,7 +346,7 @@ std::optional<ProcessingStatus> MetadataStore::file_processing_status(std::strin
         };
     return result;
   } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to get file processing status: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("file_processing_status", e));
   }
 }
 
@@ -376,7 +378,7 @@ std::vector<FileMetadata> MetadataStore::list_all_files() {
           files.push_back(std::move(metadata));
         };
   } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to list all files: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("list_all_files", e));
   }
 
   return files;
@@ -386,7 +388,7 @@ void MetadataStore::delete_file_metadata(const std::string &path) {
   try {
     db_ << "DELETE FROM files WHERE path = ?" << path;
   } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to delete file metadata: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("delete_file_metadata", e));
   }
 }
 
@@ -432,7 +434,7 @@ void MetadataStore::rebuild_faiss_index() {
       faiss_index_->add_with_ids(current_num_vectors, all_vectors_flat.data(), faiss_ids.data());
     }
   } catch (const sqlite::sqlite_exception &e) {
-    throw MetadataStoreError("Failed to rebuild Faiss index: " + std::string(e.what()));
+    throw MetadataStoreError(format_db_error("rebuild_faiss_index", e));
   }
 }
 

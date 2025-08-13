@@ -5,6 +5,8 @@
 #include <iomanip>
 #include <ctime>
 #include "magic_core/db/task.hpp"
+#include "magic_core/db/transaction.hpp"
+#include "magic_core/db/sqlite_error_utils.hpp"
 
 namespace magic_core {
 
@@ -30,17 +32,22 @@ std::string TaskQueueRepo::time_point_to_string(const std::chrono::system_clock:
 std::chrono::system_clock::time_point TaskQueueRepo::string_to_time_point(const std::string &time_str) { return parse_time(time_str); }
 
 long long TaskQueueRepo::create_task(const std::string& task_type, const std::string& file_path, int priority) {
-  auto now = std::chrono::system_clock::now();
-  std::string created_at_str = time_point_to_string(now);
-  std::string updated_at_str = created_at_str;
-  db_ << "INSERT INTO task_queue (task_type, file_path, priority, created_at, updated_at) VALUES (?,?,?,?,?)"
-      << task_type << file_path << priority << created_at_str << updated_at_str;
-  return static_cast<long long>(db_.last_insert_rowid());
+  try {
+    auto now = std::chrono::system_clock::now();
+    std::string created_at_str = time_point_to_string(now);
+    std::string updated_at_str = created_at_str;
+    db_ << "INSERT INTO task_queue (task_type, file_path, priority, created_at, updated_at) VALUES (?,?,?,?,?)"
+        << task_type << file_path << priority << created_at_str << updated_at_str;
+    return static_cast<long long>(db_.last_insert_rowid());
+  } catch (const sqlite::sqlite_exception& e) {
+    throw TaskQueueRepoError(format_db_error("create_task", e));
+  }
 }
 
 std::optional<Task> TaskQueueRepo::fetch_and_claim_next_task() {
   std::optional<Task> result;
-  db_ << "BEGIN TRANSACTION;";
+  try {
+  Transaction tx(db_, true);
   std::string pending_status = to_string(TaskStatus::PENDING);
   db_ << "SELECT id, task_type, file_path, status, priority, error_message, created_at, updated_at FROM task_queue WHERE status = ? ORDER BY priority ASC, created_at ASC LIMIT 1"
       << pending_status >>
@@ -68,8 +75,11 @@ std::optional<Task> TaskQueueRepo::fetch_and_claim_next_task() {
     result->status = TaskStatus::PROCESSING;
     result->updated_at = now;
   }
-  db_ << "COMMIT;";
+  tx.commit();
   return result;
+  } catch (const sqlite::sqlite_exception& e) {
+    throw TaskQueueRepoError(format_db_error("fetch_and_claim_next_task", e));
+  }
 }
 
 void TaskQueueRepo::update_task_status(long long task_id, TaskStatus new_status) {

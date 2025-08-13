@@ -8,11 +8,6 @@
 #include <sqlite_modern_cpp.h>
 
 namespace magic_core {
-class DatabaseManagerException : public std::runtime_error {
- public:
-  explicit DatabaseManagerException(const std::string& message) : std::runtime_error(message) {}
-};
-
 /**
  * DatabaseManager owns the SQLite connection (SQLCipher-enabled), applies the
  * encryption key, PRAGMAs, and runs all migrations (table/index creation).

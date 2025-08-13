@@ -50,18 +50,14 @@ std::optional<long long> FileProcessingService::request_processing(
   std::string content_hash = extractor.get_content_hash(file_path);
 
   auto requested_file_processing_status = metadata_store_->file_processing_status(content_hash);
-  if (requested_file_processing_status.has_value() && *requested_file_processing_status != ProcessingStatus::FAILED) {
+  if (requested_file_processing_status.has_value() &&
+      *requested_file_processing_status != ProcessingStatus::FAILED) {
     return std::nullopt;
   }
-  try {
-    metadata_store_->upsert_file_stub(
-        create_file_stub(file_path, extractor.get_file_type(), content_hash));
-    long long task_id = task_queue_repo_->create_task("PROCESS_FILE", file_path.string());
-    return task_id;
-  } catch (const std::exception& e) {
-    std::cout << "Error starting file processing: " << e.what() << std::endl;
-    return std::nullopt;
-  }
+  metadata_store_->upsert_file_stub(
+      create_file_stub(file_path, extractor.get_file_type(), content_hash));
+  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", file_path.string());
+  return task_id;
 }
 
 }  // namespace magic_core

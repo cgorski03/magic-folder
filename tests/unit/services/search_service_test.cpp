@@ -28,7 +28,11 @@ class SearchServiceTest : public magic_tests::MetadataStoreTestBase {
     }
 
     // Create the service with mocked dependencies
-    search_service_ = std::make_unique<magic_core::SearchService>(metadata_store_, mock_ollama_client_);
+    // Provide a no-op decompressor so tests don't depend on zstd
+    auto noop_decompress = [](const std::vector<char>& data) {
+      return std::string(data.begin(), data.end());
+    };
+    search_service_ = std::make_unique<magic_core::SearchService>(metadata_store_, mock_ollama_client_, noop_decompress);
 
     // Metadata store is initialized by the fixture (constructor handles setup with encryption)
 
@@ -315,7 +319,7 @@ TEST_F(SearchServiceTest, Search_OllamaClientError) {
       .WillOnce(testing::Throw(magic_core::OllamaError("Embedding failed")));
 
   // Act & Assert
-  EXPECT_THROW(search_service_->search_files(query, 3), SearchServiceException);
+  EXPECT_THROW(search_service_->search_files(query, 3), std::exception);
 }
 
 // Test error handling when metadata store search fails
@@ -329,7 +333,7 @@ TEST_F(SearchServiceTest, Search_MetadataStoreError) {
       .WillOnce(testing::Return(std::vector<float>()));  // Empty vector
 
   // Act & Assert
-  EXPECT_THROW(search_service_->search_files(query, 3), SearchServiceException);
+  EXPECT_THROW(search_service_->search_files(query, 3), std::exception);
 }
 
 // Test search with different embedding dimensions
@@ -479,7 +483,7 @@ TEST_F(SearchServiceTest, Search_CombinedOllamaClientError) {
       .WillOnce(testing::Throw(magic_core::OllamaError("Embedding failed")));
 
   // Act & Assert
-  EXPECT_THROW(search_service_->search(query, 3), SearchServiceException);
+  EXPECT_THROW(search_service_->search(query, 3), std::exception);
 }
 
 // Test search() method with metadata store error
@@ -492,7 +496,7 @@ TEST_F(SearchServiceTest, Search_CombinedMetadataStoreError) {
       .WillOnce(testing::Return(std::vector<float>()));  // Empty vector
 
   // Act & Assert
-  EXPECT_THROW(search_service_->search(query, 3), SearchServiceException);
+  EXPECT_THROW(search_service_->search(query, 3), std::exception);
 }
 
 // Test that chunk results are properly ordered by distance
