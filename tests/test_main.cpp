@@ -3,14 +3,12 @@
 #include <iostream>
 
 // Main function for the test executable
-// This will run all tests that are linked into this executable
 int main(int argc, char **argv) {
   std::cout << "Running Magic Folder Test Suite..." << std::endl;
 
-  // Initialize Google Test
   ::testing::InitGoogleTest(&argc, argv);
 
-  // Run all tests
+  // Fixtures reinitialize/clear the database per-test; no global setup required here
   int result = RUN_ALL_TESTS();
 
   if (result == 0) {

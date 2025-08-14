@@ -10,6 +10,7 @@
 #include "magic_core/db/database_manager.hpp"
 #include "magic_core/db/metadata_store.hpp"
 #include "magic_core/db/task_queue_repo.hpp"
+#include "magic_core/db/pooled_connection.hpp"
 
 namespace magic_tests {
 
@@ -71,22 +72,44 @@ class TestUtilities {
  */
 class MetadataStoreTestBase : public ::testing::Test {
  protected:
-  void SetUp() override {
+    void SetUp() override {
     temp_db_path_ = TestUtilities::create_temp_test_db();
-    // Use a deterministic test key for SQLCipher-enabled databases
     const std::string test_db_key = "magic_folder_test_key";
-    db_manager_ = std::make_shared<magic_core::DatabaseManager>(temp_db_path_, test_db_key);
+    // Initialize singleton with a small pool for tests
+      auto& mgr = magic_core::DatabaseManager::get_instance();
+      // If a previous test left the DB initialized, shut it down to re-init with a fresh temp path
+      mgr.shutdown();
+      mgr.initialize(temp_db_path_, test_db_key, /*pool_size*/ 4);
+    // Hold a non-owning pointer-like reference to the singleton for convenience
+    db_manager_ = &mgr;
     metadata_store_ = std::make_shared<magic_core::MetadataStore>(*db_manager_);
     task_queue_repo_ = std::make_shared<magic_core::TaskQueueRepo>(*db_manager_);
+
+      // Ensure a clean database for each test
+      clear_database();
   }
 
-  void TearDown() override {
-    metadata_store_.reset();
-    TestUtilities::cleanup_temp_db(temp_db_path_);
-  }
+    void TearDown() override {
+      metadata_store_.reset();
+      task_queue_repo_.reset();
+      // Fully reinitialize DB on next test; also remove temp file
+      if (db_manager_) {
+        db_manager_->shutdown();
+      }
+      TestUtilities::cleanup_temp_db(temp_db_path_);
+    }
 
-  std::filesystem::path temp_db_path_;
-  std::shared_ptr<magic_core::DatabaseManager> db_manager_;
+    void clear_database() {
+      magic_core::PooledConnection conn(*db_manager_);
+      // Order matters due to FKs: files cascades to chunks
+      *conn << "DELETE FROM task_queue;";
+      *conn << "DELETE FROM files;";
+      // chunks have ON DELETE CASCADE, but in case of disabled FKs in some builds, ensure empty
+      *conn << "DELETE FROM chunks;";
+    }
+
+    std::filesystem::path temp_db_path_;
+  magic_core::DatabaseManager* db_manager_ = nullptr;
   std::shared_ptr<magic_core::MetadataStore> metadata_store_;
   std::shared_ptr<magic_core::TaskQueueRepo> task_queue_repo_;
 };

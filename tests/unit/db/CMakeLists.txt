@@ -6,6 +6,7 @@ set(DB_TEST_SOURCES
     metadata_store_test.cpp
     database_manager_test.cpp
     task_repo_test.cpp
+    connection_pool_test.cpp
     file_info_service_test.cpp
     file_delete_service_test.cpp
 )

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "../../common/utilities_test.hpp"
@@ -182,16 +183,20 @@ TEST_F(TaskQueueRepoTest, TaskTimestamps_AreSetCorrectly) {
 TEST_F(TaskQueueRepoTest, TaskClaiming_AtomicOperation) {
   long long task_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file.txt");
 
-  auto task1 = task_queue_repo_->fetch_and_claim_next_task();
-  auto task2 = task_queue_repo_->fetch_and_claim_next_task();
+  // Simulate concurrent claims using multiple threads
+  std::optional<Task> t1;
+  std::optional<Task> t2;
+  std::thread th1([&]{ t1 = task_queue_repo_->fetch_and_claim_next_task(); });
+  std::thread th2([&]{ t2 = task_queue_repo_->fetch_and_claim_next_task(); });
+  th1.join();
+  th2.join();
 
-  EXPECT_TRUE(task1.has_value());
-  EXPECT_FALSE(task2.has_value());
-
-  if (task1.has_value()) {
-    EXPECT_EQ(task1->id, task_id);
-    EXPECT_EQ(task1->status, TaskStatus::PROCESSING);
-  }
+  // Exactly one thread should get the task
+  EXPECT_NE(t1.has_value(), t2.has_value());
+  const std::optional<Task>& claimed = t1.has_value() ? t1 : t2;
+  ASSERT_TRUE(claimed.has_value());
+  EXPECT_EQ(claimed->id, task_id);
+  EXPECT_EQ(claimed->status, TaskStatus::PROCESSING);
 }
 
 }  // namespace magic_core
