@@ -125,8 +125,11 @@ void MetadataStore::update_file_ai_analysis(int file_id,
                                std::to_string(summary_vector.size()) + ".");
     }
 
-    // Check if file exists first
-    if (!get_file_metadata(file_id).has_value()) {
+    bool exists = false;
+    *conn << "SELECT 1 FROM files WHERE id = ? LIMIT 1" << file_id >> [&](int /*dummy*/) {
+      exists = true;
+    };
+    if (!exists) {
       throw MetadataStoreError("File with ID " + std::to_string(file_id) + " not found");
     }
 
@@ -422,29 +425,32 @@ void MetadataStore::rebuild_faiss_index() {
   }
 
   try {
-    PooledConnection conn(db_manager_);
     std::vector<faiss::idx_t> faiss_ids;
     std::vector<float> all_vectors_flat;
     int current_num_vectors = 0;
 
-    // Fetch all IDs and vectors from the database
-    *conn << "SELECT id, summary_vector_blob FROM files WHERE summary_vector_blob IS NOT NULL" >>
-        [&](int64_t id, std::vector<char> vector_blob) {
-          // Validate vector size to match expected dimension
-          if (vector_blob.size() == VECTOR_DIMENSION * sizeof(float)) {
-            faiss_ids.push_back(id);
-            const float *vec_ptr = reinterpret_cast<const float *>(vector_blob.data());
-            // Append vector data to a flat vector
-            all_vectors_flat.insert(all_vectors_flat.end(), vec_ptr, vec_ptr + VECTOR_DIMENSION);
-            current_num_vectors++;
-          } else if (vector_blob.size() > 0) {
-            // Log a warning for mismatched dimensions, but continue processing others
-            std::cerr << "Warning: Skipping file ID " << id
-                      << " during index rebuild due to mismatched vector dimension. Expected "
-                      << VECTOR_DIMENSION * sizeof(float) << " bytes, got " << vector_blob.size()
-                      << " bytes." << std::endl;
-          }
-        };
+    {
+      // Scope the connection strictly to the DB fetch
+      PooledConnection conn(db_manager_);
+      // Fetch all IDs and vectors from the database
+      *conn << "SELECT id, summary_vector_blob FROM files WHERE summary_vector_blob IS NOT NULL" >>
+          [&](int64_t id, std::vector<char> vector_blob) {
+            // Validate vector size to match expected dimension
+            if (vector_blob.size() == VECTOR_DIMENSION * sizeof(float)) {
+              faiss_ids.push_back(id);
+              const float *vec_ptr = reinterpret_cast<const float *>(vector_blob.data());
+              // Append vector data to a flat vector
+              all_vectors_flat.insert(all_vectors_flat.end(), vec_ptr, vec_ptr + VECTOR_DIMENSION);
+              current_num_vectors++;
+            } else if (vector_blob.size() > 0) {
+              // Log a warning for mismatched dimensions, but continue processing others
+              std::cerr << "Warning: Skipping file ID " << id
+                        << " during index rebuild due to mismatched vector dimension. Expected "
+                        << VECTOR_DIMENSION * sizeof(float) << " bytes, got " << vector_blob.size()
+                        << " bytes." << std::endl;
+            }
+          };
+    }
 
     if (current_num_vectors > 0) {
       // Add all vectors to the Faiss index in one go
@@ -470,22 +476,70 @@ std::vector<FileSearchResult> MetadataStore::search_similar_files(
   std::vector<faiss::idx_t> labels(actual_k);
   search_faiss_index(faiss_index_, query_vector, actual_k, distances, labels);
 
-  std::vector<FileSearchResult> results;
+  // Build a list of valid ids in label order
+  std::vector<int> label_ids;
+  label_ids.reserve(actual_k);
   for (int i = 0; i < actual_k; ++i) {
-    long faiss_id = labels[i];
-    // Faiss returns -1 for padded results if it finds fewer than 'k' neighbors
-    if (faiss_id == -1) {
-      continue;
+    if (labels[i] != -1) {
+      label_ids.push_back(static_cast<int>(labels[i]));
     }
+  }
+  if (label_ids.empty()) {
+    return {};
+  }
 
-    // Fetch full metadata for the file using its ID from SQLite
-    std::optional<FileMetadata> metadata = get_file_metadata(static_cast<int>(faiss_id));
+  // Fetch all required file metadata in one query using a single connection
+  std::unordered_map<int, FileMetadata> id_to_metadata;
+  {
+    PooledConnection conn(db_manager_);
+    std::string ids_str = int_vector_to_comma_string(label_ids);
+    *conn << "SELECT id, path, original_path, file_hash, processing_status, tags, "
+                 "last_modified, created_at, file_type, file_size, summary_vector_blob, "
+                 "suggested_category, suggested_filename FROM files WHERE id IN (" + ids_str + ")" >>
+        [&](int id, std::string path, std::optional<std::string> original_path,
+            std::string file_hash, std::optional<std::string> processing_status,
+            std::optional<std::string> tags, std::string last_modified, std::string created_at,
+            std::string file_type, int64_t file_size, std::optional<std::vector<char>> vector_blob,
+            std::optional<std::string> suggested_category,
+            std::optional<std::string> suggested_filename) {
+          FileMetadata metadata;
+          metadata.id = id;
+          metadata.path = path;
+          if (original_path)
+            metadata.original_path = *original_path;
+          metadata.content_hash = file_hash;
+          if (processing_status)
+            metadata.processing_status = processing_status_from_string(*processing_status);
+          if (tags)
+            metadata.tags = *tags;
+          metadata.last_modified = string_to_time_point(last_modified);
+          metadata.created_at = string_to_time_point(created_at);
+          metadata.file_type = file_type_from_string(file_type);
+          metadata.file_size = static_cast<size_t>(file_size);
+          if (vector_blob && vector_blob->size() == VECTOR_DIMENSION * sizeof(float)) {
+            const float *data = reinterpret_cast<const float *>(vector_blob->data());
+            metadata.summary_vector_embedding.assign(data, data + VECTOR_DIMENSION);
+          }
+          if (suggested_category)
+            metadata.suggested_category = *suggested_category;
+          if (suggested_filename)
+            metadata.suggested_filename = *suggested_filename;
+          id_to_metadata[id] = std::move(metadata);
+        };
+  }
 
-    if (metadata) {
-      results.push_back({metadata->id, distances[i], std::move(*metadata)});
+  // Assemble results in the same order as the labels/distances
+  std::vector<FileSearchResult> results;
+  results.reserve(label_ids.size());
+  for (int i = 0; i < actual_k; ++i) {
+    int id = static_cast<int>(labels[i]);
+    if (id == -1)
+      continue;
+    auto it = id_to_metadata.find(id);
+    if (it != id_to_metadata.end()) {
+      results.push_back({id, distances[i], std::move(it->second)});
     } else {
-      // This is a critical warning: Faiss returned an ID, but it's not in the DB.
-      std::cerr << "Warning: Faiss returned ID " << faiss_id
+      std::cerr << "Warning: Faiss returned ID " << id
                 << " but no corresponding metadata found in DB." << std::endl;
     }
   }
@@ -501,35 +555,32 @@ std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
   }
 
   try {
-    PooledConnection conn(db_manager_);
-    // Create temporary chunk index
-    auto chunk_index = std::unique_ptr<faiss::IndexIDMap>(create_base_index());
+    // Load vectors from DB into memory first to avoid holding a connection while enriching results
     std::vector<faiss::idx_t> faiss_ids;
     std::vector<float> all_vectors_flat;
     int current_num_vectors = 0;
+    {
+      PooledConnection conn(db_manager_);
+      std::string file_ids_str = int_vector_to_comma_string(file_ids);
+      *conn << "SELECT id, vector_blob FROM chunks WHERE file_id IN (" + file_ids_str +
+                   ") ORDER BY file_id, chunk_index" >>
+          [&](int64_t id, std::vector<char> vector_blob) {
+            if (vector_blob.size() == VECTOR_DIMENSION * sizeof(float)) {
+              faiss_ids.push_back(id);
+              const float *vec_ptr = reinterpret_cast<const float *>(vector_blob.data());
+              all_vectors_flat.insert(all_vectors_flat.end(), vec_ptr, vec_ptr + VECTOR_DIMENSION);
+              current_num_vectors++;
+            } else if (vector_blob.size() > 0) {
+              std::cerr << "Warning: Skipping chunk ID " << id
+                        << " during index rebuild due to mismatched vector dimension. Expected "
+                        << VECTOR_DIMENSION * sizeof(float) << " bytes, got " << vector_blob.size()
+                        << " bytes." << std::endl;
+            }
+          };
+    }
 
-    std::string file_ids_str = int_vector_to_comma_string(file_ids);
-
-    *conn << "SELECT id, vector_blob FROM chunks WHERE file_id IN (" + file_ids_str +
-                 ") ORDER BY file_id, chunk_index" >>
-        [&](int64_t id, std::vector<char> vector_blob) {
-          // Validate vector size to match expected dimension
-          if (vector_blob.size() == VECTOR_DIMENSION * sizeof(float)) {
-            faiss_ids.push_back(id);
-            const float *vec_ptr = reinterpret_cast<const float *>(vector_blob.data());
-            // Append vector data to a flat vector
-            all_vectors_flat.insert(all_vectors_flat.end(), vec_ptr, vec_ptr + VECTOR_DIMENSION);
-            current_num_vectors++;
-          } else if (vector_blob.size() > 0) {
-            // Log a warning for mismatched dimensions, but continue processing others
-            std::cerr << "Warning: Skipping chunk ID " << id
-                      << " during index rebuild due to mismatched vector dimension. Expected "
-                      << VECTOR_DIMENSION * sizeof(float) << " bytes, got " << vector_blob.size()
-                      << " bytes." << std::endl;
-          }
-        };
-
-    // Build a faiss index of the chunks by batch adding at the end
+    // Create temporary chunk index and perform FAISS search without holding DB connection
+    auto chunk_index = std::unique_ptr<faiss::IndexIDMap>(create_base_index());
     if (current_num_vectors > 0) {
       chunk_index->add_with_ids(current_num_vectors, all_vectors_flat.data(), faiss_ids.data());
     }

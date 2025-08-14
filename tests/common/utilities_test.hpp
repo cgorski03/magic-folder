@@ -79,7 +79,8 @@ class MetadataStoreTestBase : public ::testing::Test {
       auto& mgr = magic_core::DatabaseManager::get_instance();
       // If a previous test left the DB initialized, shut it down to re-init with a fresh temp path
       mgr.shutdown();
-      mgr.initialize(temp_db_path_, test_db_key, /*pool_size*/ 4);
+    // Use a single pooled connection by default to keep tests fast
+    mgr.initialize(temp_db_path_, test_db_key, /*pool_size*/ 1);
     // Hold a non-owning pointer-like reference to the singleton for convenience
     db_manager_ = &mgr;
     metadata_store_ = std::make_shared<magic_core::MetadataStore>(*db_manager_);

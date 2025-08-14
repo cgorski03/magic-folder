@@ -16,7 +16,9 @@ protected:
     const std::string test_db_key = "magic_folder_test_key";
     // Ensure schema exists before spinning connections
     auto &mgr = DatabaseManager::get_instance();
-    mgr.initialize(temp_db_path_, test_db_key, /*pool_size*/ 2);
+    mgr.shutdown();
+    // Use a larger pool in this suite to validate multi-connection behavior
+    mgr.initialize(temp_db_path_, test_db_key, /*pool_size*/ 4);
   }
 
   void TearDown() override {
@@ -41,14 +43,16 @@ TEST_F(ConnectionPoolTest, CanBorrowAndReturnConnections) {
 TEST_F(ConnectionPoolTest, BlocksWhenPoolExhaustedAndResumes) {
   auto &mgr = DatabaseManager::get_instance();
 
-  // Exhaust pool (size=2 from SetUp)
+  // Exhaust pool (size=4 from SetUp)
   auto holder1 = std::make_unique<PooledConnection>(mgr);
   auto holder2 = std::make_unique<PooledConnection>(mgr);
+  auto holder3 = std::make_unique<PooledConnection>(mgr);
+  auto holder4 = std::make_unique<PooledConnection>(mgr);
 
   std::promise<void> start_promise;
   std::shared_future<void> start_future(start_promise.get_future());
 
-  // Request third connection on another thread, which should block until one is returned
+  // Request another connection on another thread, which should block until one is returned
   std::atomic<bool> acquired{false};
   std::thread t([&]() {
     start_future.wait();
