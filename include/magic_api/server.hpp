@@ -15,7 +15,6 @@ class Server {
   Server(Server &&) = delete;
   Server &operator=(Server &&) = delete;
 
-  // Get the Crow app reference for route registration
   crow::SimpleApp &get_app() {
     return app_;
   }
@@ -28,17 +27,11 @@ class Server {
     return running_;
   }
 
-  std::string get_host() const {
-    return host_;
-  }
-  int get_port() const {
-    return port_;
-  }
-
  private:
   crow::SimpleApp app_;
   std::string host_;
   int port_;
+  std::future<void> server_thread_future_;  // Manages the server thread
   bool running_ = false;
 };
-}
+}  // namespace magic_api

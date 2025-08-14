@@ -1,39 +1,35 @@
 #pragma once
-#define SQLITE_HAS_CODEC 1
-#define SQLCIPHER_CRYPTO_OPENSSL 1
+
+#include "magic_core/db/connection_pool.hpp"
 #include <filesystem>
 #include <memory>
-
-#include <sqlcipher/sqlite3.h>
-#include <sqlite_modern_cpp.h>
+#include <string>
 
 namespace magic_core {
-/**
- * DatabaseManager owns the SQLite connection (SQLCipher-enabled), applies the
- * encryption key, PRAGMAs, and runs all migrations (table/index creation).
- */
+
 class DatabaseManager {
- public:
-  explicit DatabaseManager(const std::filesystem::path& db_path, const std::string& db_key);
-  ~DatabaseManager() = default;
+public:
+    // Singleton access
+    static DatabaseManager& get_instance();
 
-  // Non-copyable, movable
-  DatabaseManager(const DatabaseManager&) = delete;
-  DatabaseManager& operator=(const DatabaseManager&) = delete;
-  DatabaseManager(DatabaseManager&&) noexcept = default;
-  DatabaseManager& operator=(DatabaseManager&&) noexcept = default;
+    // Must be called once at application startup
+    void initialize(const std::filesystem::path& db_path, const std::string& db_key, int pool_size);
 
-  sqlite::database& get_db();
+    // These methods are used by the PooledConnection guard
+    std::unique_ptr<sqlite::database> get_connection();
+    void return_connection(std::unique_ptr<sqlite::database> conn);
 
- private:
-  void open_database(const std::filesystem::path& db_path, const std::string& db_key);
-  void run_pragmas();
-  void create_tables();
+    void shutdown();
 
- private:
-  std::unique_ptr<sqlite::database> db_;
+    DatabaseManager(const DatabaseManager&) = delete;
+    DatabaseManager& operator=(const DatabaseManager&) = delete;
+
+private:
+    DatabaseManager() = default;
+    void setup_schema(const std::filesystem::path& db_path, const std::string& db_key);
+
+    std::unique_ptr<ConnectionPool> pool_;
+    bool is_initialized_ = false;
 };
 
-}  // namespace magic_core
-
-
+} // namespace magic_core

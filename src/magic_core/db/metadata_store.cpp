@@ -8,8 +8,10 @@
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
-#include "magic_core/db/transaction.hpp"
+
+#include "magic_core/db/pooled_connection.hpp"
 #include "magic_core/db/sqlite_error_utils.hpp"
+#include "magic_core/db/transaction.hpp"
 
 namespace magic_core {
 
@@ -42,7 +44,7 @@ std::chrono::system_clock::time_point MetadataStore::get_file_last_modified(
 }
 
 MetadataStore::MetadataStore(DatabaseManager &db_manager)
-    : db_(db_manager.get_db()), faiss_index_(nullptr) {
+    : db_manager_(db_manager), faiss_index_(nullptr) {
   rebuild_faiss_index();
 }
 MetadataStore::~MetadataStore() {
@@ -53,7 +55,9 @@ MetadataStore::~MetadataStore() {
 
 // MetadataStore is non-movable to keep DB references stable
 
-void MetadataStore::initialize() { rebuild_faiss_index(); }
+void MetadataStore::initialize() {
+  rebuild_faiss_index();
+}
 
 /*
 This upserts a file stub. If the file already exists, it will update the file.
@@ -67,33 +71,34 @@ int MetadataStore::upsert_file_stub(const BasicFileMetadata &basic_metadata) {
     std::string created_at_str = time_point_to_string(basic_metadata.created_at);
 
     int result_id = -1;
-    Transaction tx(db_, /*immediate*/ true);
+    PooledConnection conn(db_manager_);
+    Transaction tx(*conn, /*immediate*/ true);
 
     // Check if file exists BEFORE doing the upsert
     int existing_id = -1;
-    db_ << "SELECT id FROM files WHERE path = ?" << basic_metadata.path >>
+    *conn << "SELECT id FROM files WHERE path = ?" << basic_metadata.path >>
         [&](int id) { existing_id = id; };
 
     if (existing_id != -1) {
       // File exists, update it and reset AI-generated fields since file content changed
-      db_ << "UPDATE files SET original_path=?, file_hash=?, processing_status=?, "
-              "tags=?, last_modified=?, file_type=?, file_size=?, "
-              "summary_vector_blob=NULL, suggested_category=NULL, suggested_filename=NULL WHERE "
-              "path=?"
-           << basic_metadata.original_path << basic_metadata.content_hash
-           << to_string(basic_metadata.processing_status) << basic_metadata.tags << last_modified_str
-           << to_string(basic_metadata.file_type) << static_cast<int64_t>(basic_metadata.file_size)
-           << basic_metadata.path;
+      *conn << "UPDATE files SET original_path=?, file_hash=?, processing_status=?, "
+               "tags=?, last_modified=?, file_type=?, file_size=?, "
+               "summary_vector_blob=NULL, suggested_category=NULL, suggested_filename=NULL WHERE "
+               "path=?"
+            << basic_metadata.original_path << basic_metadata.content_hash
+            << to_string(basic_metadata.processing_status) << basic_metadata.tags
+            << last_modified_str << to_string(basic_metadata.file_type)
+            << static_cast<int64_t>(basic_metadata.file_size) << basic_metadata.path;
       result_id = existing_id;
     } else {
       // File doesn't exist, insert new
-      db_ << "INSERT INTO files (path, original_path, file_hash, processing_status, tags, "
-              "last_modified, created_at, file_type, file_size) VALUES (?,?,?,?,?,?,?,?,?)"
-           << basic_metadata.path << basic_metadata.original_path << basic_metadata.content_hash
-           << to_string(basic_metadata.processing_status) << basic_metadata.tags << last_modified_str
-           << created_at_str << to_string(basic_metadata.file_type)
-           << static_cast<int64_t>(basic_metadata.file_size);
-      result_id = static_cast<int>(db_.last_insert_rowid());
+      *conn << "INSERT INTO files (path, original_path, file_hash, processing_status, tags, "
+               "last_modified, created_at, file_type, file_size) VALUES (?,?,?,?,?,?,?,?,?)"
+            << basic_metadata.path << basic_metadata.original_path << basic_metadata.content_hash
+            << to_string(basic_metadata.processing_status) << basic_metadata.tags
+            << last_modified_str << created_at_str << to_string(basic_metadata.file_type)
+            << static_cast<int64_t>(basic_metadata.file_size);
+      result_id = static_cast<int>(conn->last_insert_rowid());
     }
 
     tx.commit();
@@ -109,6 +114,9 @@ void MetadataStore::update_file_ai_analysis(int file_id,
                                             const std::string &suggested_filename,
                                             ProcessingStatus processing_status) {
   try {
+    PooledConnection conn(db_manager_);
+    Transaction tx(*conn, true);
+
     // Validate vector dimensions if provided
     if (!summary_vector.empty() && summary_vector.size() != VECTOR_DIMENSION) {
       throw MetadataStoreError("Vector embedding size mismatch for file_id " +
@@ -127,15 +135,16 @@ void MetadataStore::update_file_ai_analysis(int file_id,
       std::vector<char> vector_blob(summary_vector.size() * sizeof(float));
       std::memcpy(vector_blob.data(), summary_vector.data(), vector_blob.size());
 
-      db_ << "UPDATE files SET summary_vector_blob = ?, suggested_category = ?, "
-              "suggested_filename = ?, processing_status = ? WHERE id = ?"
-           << vector_blob << suggested_category << suggested_filename
-           << to_string(processing_status) << file_id;
+      *conn << "UPDATE files SET summary_vector_blob = ?, suggested_category = ?, "
+               "suggested_filename = ?, processing_status = ? WHERE id = ?"
+            << vector_blob << suggested_category << suggested_filename
+            << to_string(processing_status) << file_id;
     } else {
-      db_ << "UPDATE files SET summary_vector_blob = NULL, suggested_category = ?, "
-              "suggested_filename = ?, processing_status = ? WHERE id = ?"
-           << suggested_category << suggested_filename << to_string(processing_status) << file_id;
+      *conn << "UPDATE files SET summary_vector_blob = NULL, suggested_category = ?, "
+               "suggested_filename = ?, processing_status = ? WHERE id = ?"
+            << suggested_category << suggested_filename << to_string(processing_status) << file_id;
     }
+    tx.commit();
   } catch (const sqlite::sqlite_exception &e) {
     throw MetadataStoreError(format_db_error("update_file_ai_analysis", e));
   }
@@ -143,7 +152,9 @@ void MetadataStore::update_file_ai_analysis(int file_id,
 
 void MetadataStore::update_file_processing_status(int file_id, ProcessingStatus processing_status) {
   try {
-    db_ << "UPDATE files SET processing_status = ? WHERE id = ?" << to_string(processing_status) << file_id;
+    PooledConnection conn(db_manager_);
+    *conn << "UPDATE files SET processing_status = ? WHERE id = ?" << to_string(processing_status)
+          << file_id;
   } catch (const sqlite::sqlite_exception &e) {
     throw MetadataStoreError(format_db_error("update_file_processing_status", e));
   }
@@ -154,14 +165,14 @@ void MetadataStore::upsert_chunk_metadata(int file_id, const std::vector<Process
     return;
 
   try {
-    Transaction tx(db_, /*immediate*/ true);
+    PooledConnection conn(db_manager_);
+    Transaction tx(*conn, true);
     for (const auto &chunk : chunks) {
       std::vector<char> vector_blob(chunk.chunk.vector_embedding.size() * sizeof(float));
       std::memcpy(vector_blob.data(), chunk.chunk.vector_embedding.data(), vector_blob.size());
-      db_ << "REPLACE INTO chunks (file_id, chunk_index, content, vector_blob) VALUES (?, ?, ?, ?)"
-           << file_id << chunk.chunk.chunk_index
-           << chunk.compressed_content
-           << vector_blob;
+      *conn
+          << "REPLACE INTO chunks (file_id, chunk_index, content, vector_blob) VALUES (?, ?, ?, ?)"
+          << file_id << chunk.chunk.chunk_index << chunk.compressed_content << vector_blob;
     }
     tx.commit();
   } catch (const sqlite::sqlite_exception &e) {
@@ -176,18 +187,20 @@ std::vector<ChunkMetadata> MetadataStore::get_chunk_metadata(std::vector<int> fi
     return chunks;
 
   try {
-    std::string file_ids_str = int_vector_to_comma_string(file_ids);
-    std::string sql = "SELECT id, file_id, chunk_index, content FROM chunks WHERE file_id IN (" +
-                      file_ids_str + ") ORDER BY file_id, chunk_index";
+    PooledConnection conn(db_manager_);
 
-    db_ << sql >> [&](int id, int file_id, int chunk_index, std::vector<char> content) {
-      ChunkMetadata chunk;
-      chunk.id = id;
-      chunk.file_id = file_id;
-      chunk.chunk_index = chunk_index;
-      chunk.content = std::move(content);
-      chunks.push_back(std::move(chunk));
-    };
+    std::string file_ids_str = int_vector_to_comma_string(file_ids);
+
+    *conn << "SELECT id, file_id, chunk_index, content FROM chunks WHERE file_id IN (" +
+                 file_ids_str + ") ORDER BY file_id, chunk_index" >>
+        [&](int id, int file_id, int chunk_index, std::vector<char> content) {
+          ChunkMetadata chunk;
+          chunk.id = id;
+          chunk.file_id = file_id;
+          chunk.chunk_index = chunk_index;
+          chunk.content = std::move(content);
+          chunks.push_back(std::move(chunk));
+        };
   } catch (const sqlite::sqlite_exception &e) {
     throw MetadataStoreError(format_db_error("get_chunk_metadata", e));
   }
@@ -201,6 +214,7 @@ void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult> &chunks) 
   }
 
   try {
+    PooledConnection conn(db_manager_);
     std::vector<int> chunk_ids;
     chunk_ids.reserve(chunks.size());
     for (const auto &chunk : chunks) {
@@ -208,15 +222,13 @@ void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult> &chunks) 
     }
 
     std::string chunk_ids_str = int_vector_to_comma_string(chunk_ids);
-    std::string sql =
-        "SELECT id, file_id, chunk_index, content FROM chunks WHERE id IN (" + chunk_ids_str + ")";
-
-    // Create a map to store metadata by ID
     std::unordered_map<int, std::tuple<int, int, std::vector<char>>> id_to_metadata;
 
-    db_ << sql >> [&](int id, int file_id, int chunk_index, std::vector<char> content) {
-      id_to_metadata[id] = {file_id, chunk_index, std::move(content)};
-    };
+    *conn << "SELECT id, file_id, chunk_index, content FROM chunks WHERE id IN (" + chunk_ids_str +
+                 ")" >>
+        [&](int id, int file_id, int chunk_index, std::vector<char> content) {
+          id_to_metadata[id] = {file_id, chunk_index, std::move(content)};
+        };
 
     // Fill in the metadata for each chunk (preserving distances)
     for (auto &chunk : chunks) {
@@ -237,11 +249,12 @@ void MetadataStore::fill_chunk_metadata(std::vector<ChunkSearchResult> &chunks) 
 std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &path) {
   try {
     std::optional<FileMetadata> result;
+    PooledConnection conn(db_manager_);
 
-    db_ << "SELECT id, path, original_path, file_hash, processing_status, tags, "
-            "last_modified, created_at, file_type, file_size, summary_vector_blob, "
-            "suggested_category, suggested_filename FROM files WHERE path = ?"
-         << path >>
+    *conn << "SELECT id, path, original_path, file_hash, processing_status, tags, "
+             "last_modified, created_at, file_type, file_size, summary_vector_blob, "
+             "suggested_category, suggested_filename FROM files WHERE path = ?"
+          << path >>
         [&](int id, std::string path, std::optional<std::string> original_path,
             std::string file_hash, std::optional<std::string> processing_status,
             std::optional<std::string> tags, std::string last_modified, std::string created_at,
@@ -286,11 +299,11 @@ std::optional<FileMetadata> MetadataStore::get_file_metadata(const std::string &
 std::optional<FileMetadata> MetadataStore::get_file_metadata(int id) {
   try {
     std::optional<FileMetadata> result;
-
-    db_ << "SELECT id, path, original_path, file_hash, processing_status, tags, "
-            "last_modified, created_at, file_type, file_size, summary_vector_blob, "
-            "suggested_category, suggested_filename FROM files WHERE id = ?"
-         << id >>
+    PooledConnection conn(db_manager_);
+    *conn << "SELECT id, path, original_path, file_hash, processing_status, tags, "
+             "last_modified, created_at, file_type, file_size, summary_vector_blob, "
+             "suggested_category, suggested_filename FROM files WHERE id = ?"
+          << id >>
         [&](int id, std::string path, std::optional<std::string> original_path,
             std::string file_hash, std::optional<std::string> processing_status,
             std::optional<std::string> tags, std::string last_modified, std::string created_at,
@@ -338,9 +351,10 @@ bool MetadataStore::file_exists(const std::string &path) {
 
 std::optional<ProcessingStatus> MetadataStore::file_processing_status(std::string content_hash) {
   try {
+    PooledConnection conn(db_manager_);
     std::optional<ProcessingStatus> result;
     // Column is stored as file_hash in the schema
-    db_ << "SELECT processing_status FROM files WHERE file_hash = ?" << content_hash >>
+    *conn << "SELECT processing_status FROM files WHERE file_hash = ?" << content_hash >>
         [&](std::string processing_status) {
           result = processing_status_from_string(processing_status);
         };
@@ -355,8 +369,9 @@ std::vector<FileMetadata> MetadataStore::list_all_files() {
   std::vector<FileMetadata> files;
 
   try {
-    db_ << "SELECT id, path, file_hash, last_modified, created_at, file_type, file_size, "
-            "summary_vector_blob FROM files" >>
+    PooledConnection conn(db_manager_);
+    *conn << "SELECT id, path, file_hash, last_modified, created_at, file_type, file_size, "
+             "summary_vector_blob FROM files" >>
         [&](int id, std::string path, std::string file_hash, std::string last_modified,
             std::string created_at, std::string file_type, int64_t file_size,
             std::optional<std::vector<char>> vector_blob) {
@@ -386,7 +401,8 @@ std::vector<FileMetadata> MetadataStore::list_all_files() {
 
 void MetadataStore::delete_file_metadata(const std::string &path) {
   try {
-    db_ << "DELETE FROM files WHERE path = ?" << path;
+    PooledConnection conn(db_manager_);
+    *conn << "DELETE FROM files WHERE path = ?" << path;
   } catch (const sqlite::sqlite_exception &e) {
     throw MetadataStoreError(format_db_error("delete_file_metadata", e));
   }
@@ -406,12 +422,13 @@ void MetadataStore::rebuild_faiss_index() {
   }
 
   try {
+    PooledConnection conn(db_manager_);
     std::vector<faiss::idx_t> faiss_ids;
     std::vector<float> all_vectors_flat;
     int current_num_vectors = 0;
 
     // Fetch all IDs and vectors from the database
-    db_ << "SELECT id, summary_vector_blob FROM files WHERE summary_vector_blob IS NOT NULL" >>
+    *conn << "SELECT id, summary_vector_blob FROM files WHERE summary_vector_blob IS NOT NULL" >>
         [&](int64_t id, std::vector<char> vector_blob) {
           // Validate vector size to match expected dimension
           if (vector_blob.size() == VECTOR_DIMENSION * sizeof(float)) {
@@ -484,6 +501,7 @@ std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
   }
 
   try {
+    PooledConnection conn(db_manager_);
     // Create temporary chunk index
     auto chunk_index = std::unique_ptr<faiss::IndexIDMap>(create_base_index());
     std::vector<faiss::idx_t> faiss_ids;
@@ -491,25 +509,25 @@ std::vector<ChunkSearchResult> MetadataStore::search_similar_chunks(
     int current_num_vectors = 0;
 
     std::string file_ids_str = int_vector_to_comma_string(file_ids);
-    std::string sql = "SELECT id, vector_blob FROM chunks WHERE file_id IN (" + file_ids_str +
-                      ") ORDER BY file_id, chunk_index";
 
-    db_ << sql >> [&](int64_t id, std::vector<char> vector_blob) {
-      // Validate vector size to match expected dimension
-      if (vector_blob.size() == VECTOR_DIMENSION * sizeof(float)) {
-        faiss_ids.push_back(id);
-        const float *vec_ptr = reinterpret_cast<const float *>(vector_blob.data());
-        // Append vector data to a flat vector
-        all_vectors_flat.insert(all_vectors_flat.end(), vec_ptr, vec_ptr + VECTOR_DIMENSION);
-        current_num_vectors++;
-      } else if (vector_blob.size() > 0) {
-        // Log a warning for mismatched dimensions, but continue processing others
-        std::cerr << "Warning: Skipping chunk ID " << id
-                  << " during index rebuild due to mismatched vector dimension. Expected "
-                  << VECTOR_DIMENSION * sizeof(float) << " bytes, got " << vector_blob.size()
-                  << " bytes." << std::endl;
-      }
-    };
+    *conn << "SELECT id, vector_blob FROM chunks WHERE file_id IN (" + file_ids_str +
+                 ") ORDER BY file_id, chunk_index" >>
+        [&](int64_t id, std::vector<char> vector_blob) {
+          // Validate vector size to match expected dimension
+          if (vector_blob.size() == VECTOR_DIMENSION * sizeof(float)) {
+            faiss_ids.push_back(id);
+            const float *vec_ptr = reinterpret_cast<const float *>(vector_blob.data());
+            // Append vector data to a flat vector
+            all_vectors_flat.insert(all_vectors_flat.end(), vec_ptr, vec_ptr + VECTOR_DIMENSION);
+            current_num_vectors++;
+          } else if (vector_blob.size() > 0) {
+            // Log a warning for mismatched dimensions, but continue processing others
+            std::cerr << "Warning: Skipping chunk ID " << id
+                      << " during index rebuild due to mismatched vector dimension. Expected "
+                      << VECTOR_DIMENSION * sizeof(float) << " bytes, got " << vector_blob.size()
+                      << " bytes." << std::endl;
+          }
+        };
 
     // Build a faiss index of the chunks by batch adding at the end
     if (current_num_vectors > 0) {

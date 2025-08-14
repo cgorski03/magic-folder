@@ -49,7 +49,7 @@ void Worker::start() {
   thread = std::thread(&Worker::run_loop, this);
 }
 
-void Worker::stop() {
+void Worker::stop() { 
   // This is a thread-safe way to signal the loop to terminate.
   should_stop.store(true);
 }

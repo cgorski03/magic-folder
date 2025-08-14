@@ -1,11 +1,11 @@
 #include "magic_core/db/task_queue_repo.hpp"
 
 #include <sqlite_modern_cpp.h>
-
 #include <ctime>
 #include <iomanip>
 #include <sstream>
 
+#include "magic_core/db/pooled_connection.hpp"
 #include "magic_core/db/sqlite_error_utils.hpp"
 #include "magic_core/db/task.hpp"
 #include "magic_core/db/transaction.hpp"
@@ -26,9 +26,7 @@ static std::chrono::system_clock::time_point parse_time(const std::string& time_
   return std::chrono::system_clock::from_time_t(timegm(&tm_struct));
 }
 
-// to_string and task_status_from_string are provided by task.hpp
-
-TaskQueueRepo::TaskQueueRepo(DatabaseManager& db_manager) : db_(db_manager.get_db()) {}
+TaskQueueRepo::TaskQueueRepo(DatabaseManager& db_manager) : db_manager_(db_manager) {}
 
 std::string TaskQueueRepo::time_point_to_string(const std::chrono::system_clock::time_point& tp) {
   return format_time(tp);
@@ -41,14 +39,15 @@ std::chrono::system_clock::time_point TaskQueueRepo::string_to_time_point(
 long long TaskQueueRepo::create_task(const std::string& task_type,
                                      const std::string& file_path,
                                      int priority) {
+  PooledConnection conn(db_manager_);
   try {
     auto now = std::chrono::system_clock::now();
     std::string created_at_str = time_point_to_string(now);
     std::string updated_at_str = created_at_str;
-    db_ << "INSERT INTO task_queue (task_type, file_path, priority, created_at, updated_at) VALUES "
+    *conn << "INSERT INTO task_queue (task_type, file_path, priority, created_at, updated_at) VALUES "
            "(?,?,?,?,?)"
         << task_type << file_path << priority << created_at_str << updated_at_str;
-    return static_cast<long long>(db_.last_insert_rowid());
+    return static_cast<long long>(conn->last_insert_rowid());
   } catch (const sqlite::sqlite_exception& e) {
     throw TaskQueueRepoError(format_db_error("create_task", e));
   }
@@ -57,9 +56,10 @@ long long TaskQueueRepo::create_task(const std::string& task_type,
 std::optional<Task> TaskQueueRepo::fetch_and_claim_next_task() {
   std::optional<Task> result;
   try {
-    Transaction tx(db_, true);
+    PooledConnection conn(db_manager_);
+    Transaction tx(*conn, true);
     std::string pending_status = to_string(TaskStatus::PENDING);
-    db_ << "SELECT id, task_type, file_path, status, priority, error_message, created_at, "
+    *conn << "SELECT id, task_type, file_path, status, priority, error_message, created_at, "
            "updated_at FROM task_queue WHERE status = ? ORDER BY priority ASC, created_at ASC "
            "LIMIT 1"
         << pending_status >>
@@ -83,7 +83,7 @@ std::optional<Task> TaskQueueRepo::fetch_and_claim_next_task() {
       auto now = std::chrono::system_clock::now();
       std::string updated_at_str = time_point_to_string(now);
       std::string processing_status = to_string(TaskStatus::PROCESSING);
-      db_ << "UPDATE task_queue SET status = ?, updated_at = ? WHERE id = ?" << processing_status
+      *conn << "UPDATE task_queue SET status = ?, updated_at = ? WHERE id = ?" << processing_status
           << updated_at_str << result->id;
       result->status = TaskStatus::PROCESSING;
       result->updated_at = now;
@@ -97,10 +97,11 @@ std::optional<Task> TaskQueueRepo::fetch_and_claim_next_task() {
 
 void TaskQueueRepo::update_task_status(long long task_id, TaskStatus new_status) {
   try {
+    PooledConnection conn(db_manager_);
     auto now = std::chrono::system_clock::now();
     std::string updated_at_str = time_point_to_string(now);
     std::string status_str = to_string(new_status);
-    db_ << "UPDATE task_queue SET status = ?, updated_at = ? WHERE id = ?" << status_str
+    *conn << "UPDATE task_queue SET status = ?, updated_at = ? WHERE id = ?" << status_str
         << updated_at_str << task_id;
   } catch (const sqlite::sqlite_exception& e) {
     throw TaskQueueRepoError(format_db_error("update_task_status", e));
@@ -109,10 +110,11 @@ void TaskQueueRepo::update_task_status(long long task_id, TaskStatus new_status)
 
 void TaskQueueRepo::mark_task_as_failed(long long task_id, const std::string& error_message) {
   try {
+    PooledConnection conn(db_manager_);
     auto now = std::chrono::system_clock::now();
     std::string updated_at_str = time_point_to_string(now);
     std::string failed_status = to_string(TaskStatus::FAILED);
-    db_ << "UPDATE task_queue SET status = ?, error_message = ?, updated_at = ? WHERE id = ?"
+    *conn << "UPDATE task_queue SET status = ?, error_message = ?, updated_at = ? WHERE id = ?"
         << failed_status << error_message << updated_at_str << task_id;
   } catch (const sqlite::sqlite_exception& e) {
     throw TaskQueueRepoError(format_db_error("mark_task_as_failed", e));
@@ -121,9 +123,10 @@ void TaskQueueRepo::mark_task_as_failed(long long task_id, const std::string& er
 
 std::vector<Task> TaskQueueRepo::get_tasks_by_status(TaskStatus status) {
   try {
+    PooledConnection conn(db_manager_);
     std::vector<Task> tasks;
     std::string status_str = to_string(status);
-    db_ << "SELECT id, task_type, file_path, status, priority, error_message, created_at, "
+    *conn << "SELECT id, task_type, file_path, status, priority, error_message, created_at, "
            "updated_at FROM task_queue WHERE status = ? ORDER BY priority ASC, created_at ASC"
         << status_str >>
         [&](long long id, std::string task_type, std::string file_path, std::string status_db,
@@ -149,11 +152,12 @@ std::vector<Task> TaskQueueRepo::get_tasks_by_status(TaskStatus status) {
 
 void TaskQueueRepo::clear_completed_tasks(int older_than_days) {
   try {
+    PooledConnection conn(db_manager_);
     auto cutoff_time = std::chrono::system_clock::now() - std::chrono::hours(24 * older_than_days);
     std::string cutoff_str = time_point_to_string(cutoff_time);
     std::string completed_status = to_string(TaskStatus::COMPLETED);
     std::string failed_status = to_string(TaskStatus::FAILED);
-    db_ << "DELETE FROM task_queue WHERE status IN (?, ?) AND updated_at <= ?" << completed_status
+    *conn << "DELETE FROM task_queue WHERE status IN (?, ?) AND updated_at <= ?" << completed_status
         << failed_status << cutoff_str;
   } catch (const sqlite::sqlite_exception& e) {
     throw TaskQueueRepoError(format_db_error("clear_completed_tasks", e));

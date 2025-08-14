@@ -158,9 +158,7 @@ class MetadataStore {
   void rebuild_faiss_index();
 
  private:
-  sqlite::database& db_; // non-owning reference provided by DatabaseManager
-    
-  // In-memory Faiss index
+  DatabaseManager& db_manager_;
   faiss::IndexIDMap *faiss_index_;
 
   // Faiss Index Parameters - since we will support multiple embedding models, these will have to be
