@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <thread>
-#include "magic_core/db/task.hpp"
 
 namespace magic_core {
 class MetadataStore;
@@ -10,6 +9,7 @@ class OllamaClient;
 struct TaskDTO;
 class ContentExtractorFactory;
 class TaskQueueRepo;
+class ServiceProvider;
 }
 
 namespace magic_core {
@@ -36,7 +36,7 @@ namespace async {
        * @param ollama A reference to the Ollama client for AI operations.
        * @param factory A reference to the content extractor factory.
        */
-      Worker(int worker_id, MetadataStore& store, TaskQueueRepo& task_queue, OllamaClient& ollama, ContentExtractorFactory& factory);
+      Worker(int worker_id, ServiceProvider& services);
   
       /**
        * @brief Destructor. Ensures the worker thread is stopped and joined cleanly.
@@ -76,20 +76,9 @@ namespace async {
        * This function continuously polls the task queue, executes tasks, and
        * sleeps when no work is available. It runs until stop() is called.
        */
-      void run_loop();
-
-      /**
-       * @brief Executes the full processing pipeline for a single task.
-       * @param task The task object fetched from the queue.
-       */
-       void execute_processing_task(const TaskDTO& task);
-  
-      int worker_id;
-  
-      MetadataStore& metadata_store;
-      TaskQueueRepo& task_queue_repo;
-      OllamaClient& ollama_client;
-      ContentExtractorFactory& extractor_factory;
+      void run_loop();  
+      int worker_id_;
+      ServiceProvider& services_;
   
       std::atomic<bool> should_stop{false};
       std::thread thread;

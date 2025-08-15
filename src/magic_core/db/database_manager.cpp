@@ -119,7 +119,7 @@ void DatabaseManager::setup_schema(const std::filesystem::path& db_path,
         task_id INTEGER PRIMARY KEY, -- This is a FOREIGN KEY to task_queue.id
         progress_percent REAL NOT NULL DEFAULT 0.0,
         status_message TEXT NOT NULL DEFAULT 'Initializing...',
-        updated_at INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
         FOREIGN KEY (task_id) REFERENCES TaskQueue(id) ON DELETE CASCADE
     );
     )";

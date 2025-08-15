@@ -3,11 +3,14 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <functional>
+#include "magic_core/db/models/task_dto.hpp"
 
-#include "magic_core/db/task.hpp"
-
+namespace magic_core {
 class ServiceProvider;
+}
 using ProgressUpdater = std::function<void(float, const std::string&)>;
+
 namespace magic_core {
 class ITask {
  public:

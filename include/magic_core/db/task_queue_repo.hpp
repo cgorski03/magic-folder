@@ -6,7 +6,8 @@
 #include <vector>
 
 #include "magic_core/db/database_manager.hpp"
-#include "magic_core/db/task.hpp"
+#include "magic_core/db/models/task_dto.hpp"
+#include "magic_core/db/models/task_progress_dto.hpp"
 
 namespace magic_core {
 
@@ -35,7 +36,8 @@ class TaskQueueRepo {
   void mark_task_as_failed(long long task_id, const std::string& error_message);
   std::vector<TaskDTO> get_tasks_by_status(TaskStatus status);
   void clear_completed_tasks(int older_than_days = 7);
-
+  void upsert_task_progress(long long task_id, float percent, const std::string& message);
+  std::optional<TaskProgressDTO> get_task_progress(long long task_id);
  private:
   DatabaseManager& db_manager_;
 

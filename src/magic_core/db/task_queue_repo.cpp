@@ -8,7 +8,6 @@
 
 #include "magic_core/db/pooled_connection.hpp"
 #include "magic_core/db/sqlite_error_utils.hpp"
-#include "magic_core/db/task.hpp"
 #include "magic_core/db/transaction.hpp"
 
 namespace magic_core {
@@ -173,5 +172,36 @@ void TaskQueueRepo::clear_completed_tasks(int older_than_days) {
     throw TaskQueueRepoError(format_db_error("clear_completed_tasks", e));
   }
 }
+void TaskQueueRepo::upsert_task_progress(long long task_id, float percent, const std::string& message) {
+  try {
+    PooledConnection conn(db_manager_);
+    auto now = std::chrono::system_clock::now();
+    std::string ts = time_point_to_string(now);
+    *conn << "INSERT INTO task_progress (task_id, progress_percent, status_message, updated_at) "
+             "VALUES (?,?,?,?) "
+             "ON CONFLICT(task_id) DO UPDATE SET "
+             "progress_percent = excluded.progress_percent, "
+             "status_message = excluded.status_message, "
+             "updated_at = excluded.updated_at"
+          << task_id << percent << message << ts;
+  } catch (const sqlite::sqlite_exception& e) {
+    throw TaskQueueRepoError(format_db_error("upsert_task_progress", e));
+  }
+}
 
+std::optional<TaskProgressDTO> TaskQueueRepo::get_task_progress(long long task_id) {
+  try {
+    PooledConnection conn(db_manager_);
+    std::optional<TaskProgressDTO> out;
+    *conn << "SELECT task_id, progress_percent, status_message, updated_at "
+             "FROM task_progress WHERE task_id = ?"
+          << task_id >>
+      [&](long long t_id, float pct, std::string msg, std::string updated_at) {
+        out = TaskProgressDTO{t_id, pct, msg, updated_at};
+      };
+    return out;
+  } catch (const sqlite::sqlite_exception& e) {
+    throw TaskQueueRepoError(format_db_error("get_task_progress", e));
+  }
+}
 }  // namespace magic_core
