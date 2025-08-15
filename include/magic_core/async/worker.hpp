@@ -79,7 +79,6 @@ namespace async {
       void run_loop();  
       int worker_id_;
       ServiceProvider& services_;
-  
       std::atomic<bool> should_stop{false};
       std::thread thread;
   };
