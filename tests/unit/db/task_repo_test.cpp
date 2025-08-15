@@ -22,7 +22,7 @@ TEST_F(TaskQueueRepoTest, CreateTask_BasicFunctionality) {
   std::string file_path = "/test/new_file.txt";
   int priority = 5;
 
-  long long task_id = task_queue_repo_->create_task(task_type, file_path, priority);
+  long long task_id = task_queue_repo_->create_file_process_task(task_type, file_path, priority);
 
   EXPECT_GT(task_id, 0);
 
@@ -39,7 +39,7 @@ TEST_F(TaskQueueRepoTest, CreateTask_DefaultPriority) {
   std::string task_type = "PROCESS_NEW_FILE";
   std::string file_path = "/test/default_priority.txt";
 
-  long long task_id = task_queue_repo_->create_task(task_type, file_path);
+  long long task_id = task_queue_repo_->create_file_process_task(task_type, file_path);
   (void)task_id;
 
   auto pending_tasks = task_queue_repo_->get_tasks_by_status(TaskStatus::PENDING);
@@ -48,9 +48,9 @@ TEST_F(TaskQueueRepoTest, CreateTask_DefaultPriority) {
 }
 
 TEST_F(TaskQueueRepoTest, FetchAndClaimNextTask_BasicFunctionality) {
-  long long task1_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file1.txt", 5);
-  long long task2_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file2.txt", 1);
-  long long task3_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file3.txt", 10);
+  long long task1_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file1.txt", 5);
+  long long task2_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file2.txt", 1);
+  long long task3_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file3.txt", 10);
   (void)task1_id; (void)task3_id;
 
   auto claimed_task = task_queue_repo_->fetch_and_claim_next_task();
@@ -71,7 +71,7 @@ TEST_F(TaskQueueRepoTest, FetchAndClaimNextTask_NoTasksAvailable) {
 }
 
 TEST_F(TaskQueueRepoTest, UpdateTaskStatus_BasicFunctionality) {
-  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file.txt");
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
 
   task_queue_repo_->update_task_status(task_id, TaskStatus::COMPLETED);
 
@@ -85,7 +85,7 @@ TEST_F(TaskQueueRepoTest, UpdateTaskStatus_BasicFunctionality) {
 }
 
 TEST_F(TaskQueueRepoTest, MarkTaskAsFailed_BasicFunctionality) {
-  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file.txt");
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
   std::string error_message = "File not found";
 
   task_queue_repo_->mark_task_as_failed(task_id, error_message);
@@ -98,9 +98,9 @@ TEST_F(TaskQueueRepoTest, MarkTaskAsFailed_BasicFunctionality) {
 }
 
 TEST_F(TaskQueueRepoTest, GetTasksByStatus_MultipleStatuses) {
-  long long pending_task1 = task_queue_repo_->create_task("PROCESS_FILE", "/test/file1.txt", 5);
-  long long pending_task2 = task_queue_repo_->create_task("PROCESS_FILE", "/test/file2.txt", 1);
-  long long processing_task = task_queue_repo_->create_task("PROCESS_FILE", "/test/file3.txt", 3);
+  long long pending_task1 = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file1.txt", 5);
+  long long pending_task2 = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file2.txt", 1);
+  long long processing_task = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file3.txt", 3);
   (void)pending_task1; (void)pending_task2;
 
   task_queue_repo_->update_task_status(processing_task, TaskStatus::PROCESSING);
@@ -119,9 +119,9 @@ TEST_F(TaskQueueRepoTest, GetTasksByStatus_MultipleStatuses) {
 }
 
 TEST_F(TaskQueueRepoTest, ClearCompletedTasks_BasicFunctionality) {
-  long long pending_task = task_queue_repo_->create_task("PROCESS_FILE", "/test/file1.txt");
-  long long completed_task = task_queue_repo_->create_task("PROCESS_FILE", "/test/file2.txt");
-  long long failed_task = task_queue_repo_->create_task("PROCESS_FILE", "/test/file3.txt");
+  long long pending_task = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file1.txt");
+  long long completed_task = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file2.txt");
+  long long failed_task = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file3.txt");
   (void)pending_task;
 
   task_queue_repo_->update_task_status(completed_task, TaskStatus::COMPLETED);
@@ -140,9 +140,9 @@ TEST_F(TaskQueueRepoTest, ClearCompletedTasks_BasicFunctionality) {
 }
 
 TEST_F(TaskQueueRepoTest, TaskPriorityOrdering_CorrectOrder) {
-  long long task_low = task_queue_repo_->create_task("PROCESS_FILE", "/test/low.txt", 10);
-  long long task_high = task_queue_repo_->create_task("PROCESS_FILE", "/test/high.txt", 1);
-  long long task_med = task_queue_repo_->create_task("PROCESS_FILE", "/test/med.txt", 5);
+  long long task_low = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/low.txt", 10);
+  long long task_high = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/high.txt", 1);
+  long long task_med = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/med.txt", 5);
 
   auto first_task = task_queue_repo_->fetch_and_claim_next_task();
   auto second_task = task_queue_repo_->fetch_and_claim_next_task();
@@ -164,7 +164,7 @@ TEST_F(TaskQueueRepoTest, TaskPriorityOrdering_CorrectOrder) {
 TEST_F(TaskQueueRepoTest, TaskTimestamps_AreSetCorrectly) {
   auto before_create = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now());
 
-  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file.txt");
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
   (void)task_id;
 
   auto after_create = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now()) + std::chrono::seconds(1);
@@ -181,11 +181,11 @@ TEST_F(TaskQueueRepoTest, TaskTimestamps_AreSetCorrectly) {
 }
 
 TEST_F(TaskQueueRepoTest, TaskClaiming_AtomicOperation) {
-  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file.txt");
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
 
   // Simulate concurrent claims using multiple threads
-  std::optional<Task> t1;
-  std::optional<Task> t2;
+  std::optional<TaskDTO> t1;
+  std::optional<TaskDTO> t2;
   std::thread th1([&]{ t1 = task_queue_repo_->fetch_and_claim_next_task(); });
   std::thread th2([&]{ t2 = task_queue_repo_->fetch_and_claim_next_task(); });
   th1.join();
@@ -193,7 +193,7 @@ TEST_F(TaskQueueRepoTest, TaskClaiming_AtomicOperation) {
 
   // Exactly one thread should get the task
   EXPECT_NE(t1.has_value(), t2.has_value());
-  const std::optional<Task>& claimed = t1.has_value() ? t1 : t2;
+  const std::optional<TaskDTO>& claimed = t1.has_value() ? t1 : t2;
   ASSERT_TRUE(claimed.has_value());
   EXPECT_EQ(claimed->id, task_id);
   EXPECT_EQ(claimed->status, TaskStatus::PROCESSING);

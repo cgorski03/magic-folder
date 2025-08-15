@@ -89,7 +89,7 @@ TEST_F(WorkerTest, RunOneTaskWithPendingTask) {
     metadata_store_->upsert_file_stub(stub);
   }
   // Create a task in the metadata store
-  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", test_file_path.string());
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", test_file_path.string());
   EXPECT_GT(task_id, 0);
   
   // Set up mock expectations
@@ -146,7 +146,7 @@ TEST_F(WorkerTest, RunOneTaskWithFailedExtraction) {
         ProcessingStatus::QUEUED);
     metadata_store_->upsert_file_stub(stub);
   }
-  long long task_id2 = task_queue_repo_->create_task("PROCESS_FILE", test_file_path.string());
+  long long task_id2 = task_queue_repo_->create_file_process_task("PROCESS_FILE", test_file_path.string());
   EXPECT_GT(task_id2, 0);
   
   // Set up mock to throw exception during extraction
@@ -175,7 +175,7 @@ TEST_F(WorkerTest, RunOneTaskWithFailedExtraction) {
 TEST_F(WorkerTest, RunOneTaskWithNonExistentFile) {
   // Create a task for a file that doesn't exist
   const std::string non_existent_path = "/path/to/nonexistent/file.txt";
-  long long task_id = task_queue_repo_->create_task("FILE_PROCESSING", non_existent_path);
+  long long task_id = task_queue_repo_->create_file_process_task("FILE_PROCESSING", non_existent_path);
   EXPECT_GT(task_id, 0);
   
   // Run the task
@@ -239,8 +239,8 @@ TEST_F(WorkerTest, MultipleTasksProcessedSequentially) {
   }
   
   // Create tasks for both files
-  long long task_id1 = task_queue_repo_->create_task("FILE_PROCESSING", test_file1.string());
-  long long task_id2 = task_queue_repo_->create_task("FILE_PROCESSING", test_file2.string());
+  long long task_id1 = task_queue_repo_->create_file_process_task("FILE_PROCESSING", test_file1.string());
+  long long task_id2 = task_queue_repo_->create_file_process_task("FILE_PROCESSING", test_file2.string());
   
   // Set up mock expectations for both tasks
   ExtractionResult mock_extraction_result;

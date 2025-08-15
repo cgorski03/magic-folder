@@ -25,15 +25,15 @@ class TaskQueueRepo {
  public:
   explicit TaskQueueRepo(DatabaseManager& db_manager);
 
-  long long create_task(const std::string& task_type,
+  long long create_file_process_task(const std::string& task_type,
                         const std::string& file_path,
                         int priority = 10);
 
-  std::optional<Task> fetch_and_claim_next_task();
+  std::optional<TaskDTO> fetch_and_claim_next_task();
 
   void update_task_status(long long task_id, TaskStatus new_status);
   void mark_task_as_failed(long long task_id, const std::string& error_message);
-  std::vector<Task> get_tasks_by_status(TaskStatus status);
+  std::vector<TaskDTO> get_tasks_by_status(TaskStatus status);
   void clear_completed_tasks(int older_than_days = 7);
 
  private:

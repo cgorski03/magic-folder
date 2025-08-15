@@ -60,7 +60,7 @@ void Worker::run_loop() {
   // The loop continues as long as the stop flag is false.
   while (!should_stop.load()) {
     // Fetch and claim a task in one atomic operation.
-    std::optional<Task> task_opt = task_queue_repo.fetch_and_claim_next_task();
+    std::optional<TaskDTO> task_opt = task_queue_repo.fetch_and_claim_next_task();
 
     if (task_opt.has_value()) {
       // If a task was found, execute it.
@@ -85,7 +85,7 @@ void Worker::run_loop() {
 bool Worker::run_one_task() {
   std::cout << "Worker [" << worker_id << "] running a single synchronous cycle..." << std::endl;
 
-  std::optional<Task> task_opt = task_queue_repo.fetch_and_claim_next_task();
+  std::optional<TaskDTO> task_opt = task_queue_repo.fetch_and_claim_next_task();
 
   if (task_opt.has_value()) {
     std::cout << "Worker [" << worker_id << "] found task for file: " << task_opt->file_path
@@ -105,7 +105,7 @@ bool Worker::run_one_task() {
   }
 }
 
-void Worker::execute_processing_task(const Task& task) {
+void Worker::execute_processing_task(const TaskDTO& task) {
   long long file_id = -1;
   std::optional<FileMetadata> file_metadata = metadata_store.get_file_metadata(task.file_path);
   if (!file_metadata.has_value()) {

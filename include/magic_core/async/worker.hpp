@@ -7,7 +7,7 @@
 namespace magic_core {
 class MetadataStore;
 class OllamaClient;
-struct Task;
+struct TaskDTO;
 class ContentExtractorFactory;
 class TaskQueueRepo;
 }
@@ -82,7 +82,7 @@ namespace async {
        * @brief Executes the full processing pipeline for a single task.
        * @param task The task object fetched from the queue.
        */
-       void execute_processing_task(const Task& task);
+       void execute_processing_task(const TaskDTO& task);
   
       int worker_id;
   

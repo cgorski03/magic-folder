@@ -56,7 +56,7 @@ std::optional<long long> FileProcessingService::request_processing(
   }
   metadata_store_->upsert_file_stub(
       create_file_stub(file_path, extractor.get_file_type(), content_hash));
-  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", file_path.string());
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", file_path.string());
   return task_id;
 }
 

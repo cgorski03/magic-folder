@@ -651,6 +651,5 @@ std::string MetadataStore::int_vector_to_comma_string(const std::vector<int> &ve
   return ss.str();
 }
 
-// Task queue methods removed from MetadataStore in repository refactor
 
-}  // namespace magic_core
+}

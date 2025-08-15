@@ -1,6 +1,7 @@
 #include "magic_core/db/task_queue_repo.hpp"
 
 #include <sqlite_modern_cpp.h>
+
 #include <ctime>
 #include <iomanip>
 #include <sstream>
@@ -36,40 +37,45 @@ std::chrono::system_clock::time_point TaskQueueRepo::string_to_time_point(
   return parse_time(time_str);
 }
 
-long long TaskQueueRepo::create_task(const std::string& task_type,
-                                     const std::string& file_path,
+long long TaskQueueRepo::create_file_process_task(const std::string& task_type,
+                                     const std::string& target_path,
                                      int priority) {
   PooledConnection conn(db_manager_);
   try {
     auto now = std::chrono::system_clock::now();
     std::string created_at_str = time_point_to_string(now);
     std::string updated_at_str = created_at_str;
-    *conn << "INSERT INTO task_queue (task_type, file_path, priority, created_at, updated_at) VALUES "
+    *conn
+        << "INSERT INTO task_queue (task_type, target_path, priority, created_at, updated_at) VALUES "
            "(?,?,?,?,?)"
-        << task_type << file_path << priority << created_at_str << updated_at_str;
+        << task_type << target_path << priority << created_at_str << updated_at_str;
     return static_cast<long long>(conn->last_insert_rowid());
   } catch (const sqlite::sqlite_exception& e) {
     throw TaskQueueRepoError(format_db_error("create_task", e));
   }
 }
 
-std::optional<Task> TaskQueueRepo::fetch_and_claim_next_task() {
-  std::optional<Task> result;
+std::optional<TaskDTO> TaskQueueRepo::fetch_and_claim_next_task() {
+  std::optional<TaskDTO> result;
   try {
     PooledConnection conn(db_manager_);
     Transaction tx(*conn, true);
     std::string pending_status = to_string(TaskStatus::PENDING);
-    *conn << "SELECT id, task_type, file_path, status, priority, error_message, created_at, "
-           "updated_at FROM task_queue WHERE status = ? ORDER BY priority ASC, created_at ASC "
-           "LIMIT 1"
-        << pending_status >>
-        [&](long long id, std::string task_type, std::string file_path, std::string status_db,
-            int priority, std::optional<std::string> error_message, std::string created_at,
-            std::string updated_at) {
-          Task task;
+    *conn << "SELECT id, task_type, status, priority, error_message, created_at, "
+             "updated_at, target_path, target_tag, payload FROM task_queue WHERE status = ? ORDER "
+             "BY priority ASC, created_at ASC "
+             "LIMIT 1"
+          << pending_status >>
+        [&](long long id, std::string task_type, std::string status_db, int priority,
+            std::optional<std::string> error_message, std::string created_at,
+            std::string updated_at, std::string target_path, std::string target_tag,
+            std::string payload) {
+          TaskDTO task;
           task.id = id;
           task.task_type = task_type;
-          task.file_path = file_path;
+          task.target_path = target_path;
+          task.target_tag = target_tag;
+          task.payload = payload;
           task.status = task_status_from_string(status_db);
           task.priority = priority;
           if (error_message)
@@ -84,7 +90,7 @@ std::optional<Task> TaskQueueRepo::fetch_and_claim_next_task() {
       std::string updated_at_str = time_point_to_string(now);
       std::string processing_status = to_string(TaskStatus::PROCESSING);
       *conn << "UPDATE task_queue SET status = ?, updated_at = ? WHERE id = ?" << processing_status
-          << updated_at_str << result->id;
+            << updated_at_str << result->id;
       result->status = TaskStatus::PROCESSING;
       result->updated_at = now;
     }
@@ -102,7 +108,7 @@ void TaskQueueRepo::update_task_status(long long task_id, TaskStatus new_status)
     std::string updated_at_str = time_point_to_string(now);
     std::string status_str = to_string(new_status);
     *conn << "UPDATE task_queue SET status = ?, updated_at = ? WHERE id = ?" << status_str
-        << updated_at_str << task_id;
+          << updated_at_str << task_id;
   } catch (const sqlite::sqlite_exception& e) {
     throw TaskQueueRepoError(format_db_error("update_task_status", e));
   }
@@ -115,27 +121,31 @@ void TaskQueueRepo::mark_task_as_failed(long long task_id, const std::string& er
     std::string updated_at_str = time_point_to_string(now);
     std::string failed_status = to_string(TaskStatus::FAILED);
     *conn << "UPDATE task_queue SET status = ?, error_message = ?, updated_at = ? WHERE id = ?"
-        << failed_status << error_message << updated_at_str << task_id;
+          << failed_status << error_message << updated_at_str << task_id;
   } catch (const sqlite::sqlite_exception& e) {
     throw TaskQueueRepoError(format_db_error("mark_task_as_failed", e));
   }
 }
 
-std::vector<Task> TaskQueueRepo::get_tasks_by_status(TaskStatus status) {
+std::vector<TaskDTO> TaskQueueRepo::get_tasks_by_status(TaskStatus status) {
   try {
     PooledConnection conn(db_manager_);
-    std::vector<Task> tasks;
+    std::vector<TaskDTO> tasks;
     std::string status_str = to_string(status);
-    *conn << "SELECT id, task_type, file_path, status, priority, error_message, created_at, "
-           "updated_at FROM task_queue WHERE status = ? ORDER BY priority ASC, created_at ASC"
-        << status_str >>
-        [&](long long id, std::string task_type, std::string file_path, std::string status_db,
-            int priority, std::optional<std::string> error_message, std::string created_at,
-            std::string updated_at) {
-          Task task;
+    *conn << "SELECT id, task_type, status, priority, error_message, created_at, "
+             "updated_at, target_path, target_tag, payload FROM task_queue WHERE status = ? ORDER "
+             "BY priority ASC, created_at ASC"
+          << status_str >>
+        [&](long long id, std::string task_type, std::string status_db, int priority,
+            std::optional<std::string> error_message, std::string created_at,
+            std::string updated_at, std::string target_path, std::string target_tag,
+            std::string payload) {
+          TaskDTO task;
           task.id = id;
           task.task_type = task_type;
-          task.file_path = file_path;
+          task.target_path = target_path;
+          task.target_tag = target_tag;
+          task.payload = payload;
           task.status = task_status_from_string(status_db);
           task.priority = priority;
           if (error_message)
@@ -158,7 +168,7 @@ void TaskQueueRepo::clear_completed_tasks(int older_than_days) {
     std::string completed_status = to_string(TaskStatus::COMPLETED);
     std::string failed_status = to_string(TaskStatus::FAILED);
     *conn << "DELETE FROM task_queue WHERE status IN (?, ?) AND updated_at <= ?" << completed_status
-        << failed_status << cutoff_str;
+          << failed_status << cutoff_str;
   } catch (const sqlite::sqlite_exception& e) {
     throw TaskQueueRepoError(format_db_error("clear_completed_tasks", e));
   }
