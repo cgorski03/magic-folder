@@ -10,6 +10,7 @@ class FileProcessingService;
 class FileDeleteService;
 class FileInfoService;
 class SearchService;
+class TaskQueueRepo;
 }  // namespace magic_core
 
 namespace magic_api {
@@ -19,7 +20,8 @@ class Routes {
   Routes(std::shared_ptr<magic_core::FileProcessingService> file_processing_service,
          std::shared_ptr<magic_core::FileDeleteService> file_delete_service,
          std::shared_ptr<magic_core::FileInfoService> file_info_service,
-         std::shared_ptr<magic_core::SearchService> search_service);
+         std::shared_ptr<magic_core::SearchService> search_service,
+         std::shared_ptr<magic_core::TaskQueueRepo> task_queue_repo);
   ~Routes() = default;
 
   // Disable copy constructor and assignment
@@ -38,6 +40,7 @@ class Routes {
   std::shared_ptr<magic_core::FileDeleteService> file_delete_service_;
   std::shared_ptr<magic_core::FileInfoService> file_info_service_;
   std::shared_ptr<magic_core::SearchService> search_service_;
+  std::shared_ptr<magic_core::TaskQueueRepo> task_queue_repo_;
 
   // Route handlers
   crow::response handle_health_check(const crow::request &req);
@@ -47,6 +50,12 @@ class Routes {
   crow::response handle_list_files(const crow::request &req);
   crow::response handle_get_file_info(const crow::request &req, const std::string &path);
   crow::response handle_delete_file(const crow::request &req, const std::string &path);
+  
+  // Task management endpoints
+  crow::response handle_list_tasks(const crow::request &req);
+  crow::response handle_get_task_status(const crow::request &req, const std::string &task_id);
+  crow::response handle_get_task_progress(const crow::request &req, const std::string &task_id);
+  crow::response handle_clear_completed_tasks(const crow::request &req);
 
   // Helper methods
   nlohmann::json parse_json_body(const std::string &body);

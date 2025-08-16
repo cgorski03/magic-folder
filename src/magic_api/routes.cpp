@@ -7,16 +7,19 @@
 #include "magic_core/services/file_info_service.hpp"
 #include "magic_core/services/file_processing_service.hpp"
 #include "magic_core/services/search_service.hpp"
+#include "magic_core/db/task_queue_repo.hpp"
 
 namespace magic_api {
 Routes::Routes(std::shared_ptr<magic_core::FileProcessingService> file_processing_service,
                std::shared_ptr<magic_core::FileDeleteService> file_delete_service,
                std::shared_ptr<magic_core::FileInfoService> file_info_service,
-               std::shared_ptr<magic_core::SearchService> search_service)
+               std::shared_ptr<magic_core::SearchService> search_service,
+               std::shared_ptr<magic_core::TaskQueueRepo> task_queue_repo)
     : file_processing_service_(file_processing_service),
       file_delete_service_(file_delete_service),
       file_info_service_(file_info_service),
-      search_service_(search_service) {}
+      search_service_(search_service),
+      task_queue_repo_(task_queue_repo) {}
 
 void Routes::register_routes(Server &server) {
   auto &app = server.get_app();
@@ -54,6 +57,25 @@ void Routes::register_routes(Server &server) {
   CROW_ROUTE(app, "/files/<string>")
       .methods(crow::HTTPMethod::DELETE)([this](const crow::request &req, const std::string &path) {
         return handle_delete_file(req, path);
+      });
+
+  // Task management endpoints
+  CROW_ROUTE(app, "/tasks")
+  ([this](const crow::request &req) { return handle_list_tasks(req); });
+
+  CROW_ROUTE(app, "/tasks/<string>/status")
+  ([this](const crow::request &req, const std::string &task_id) {
+    return handle_get_task_status(req, task_id);
+  });
+
+  CROW_ROUTE(app, "/tasks/<string>/progress")
+  ([this](const crow::request &req, const std::string &task_id) {
+    return handle_get_task_progress(req, task_id);
+  });
+
+  CROW_ROUTE(app, "/tasks/clear")
+      .methods(crow::HTTPMethod::POST)([this](const crow::request &req) {
+        return handle_clear_completed_tasks(req);
       });
 
   std::cout << "All routes registered successfully" << std::endl;
@@ -244,4 +266,194 @@ int Routes::extract_top_k_from_request(const crow::request &req) {
   auto json_body = parse_json_body(req.body);
   return json_body.value("top_k", 10);
 }
+
+// ============================================================================
+// Task Management Route Handlers
+// ============================================================================
+
+crow::response Routes::handle_list_tasks(const crow::request &req) {
+  try {
+    std::cout << "Listing tasks" << std::endl;
+    
+    // Parse optional status filter from query parameters
+    std::optional<magic_core::TaskStatus> status_filter;
+    std::string query_string = req.url_params.get("status") ? req.url_params.get("status") : "";
+    
+    nlohmann::json tasks_json = nlohmann::json::array();
+    
+    if (!query_string.empty()) {
+      // Filter by specific status
+      try {
+        magic_core::TaskStatus status = magic_core::task_status_from_string(query_string);
+        auto tasks = task_queue_repo_->get_tasks_by_status(status);
+        
+        for (const auto &task : tasks) {
+          nlohmann::json task_json;
+          task_json["id"] = task.id;
+          task_json["task_type"] = task.task_type;
+          task_json["status"] = magic_core::to_string(task.status);
+          task_json["priority"] = task.priority;
+          task_json["target_path"] = task.target_path;
+          task_json["target_tag"] = task.target_tag;
+          task_json["payload"] = task.payload;
+          task_json["error_message"] = task.error_message;
+          task_json["created_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.created_at);
+          task_json["updated_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.updated_at);
+          tasks_json.push_back(task_json);
+        }
+      } catch (const std::exception &e) {
+        nlohmann::json error_response = create_error_response("Invalid status filter: " + query_string);
+        return create_json_response(error_response, 400);
+      }
+    } else {
+      // Get all tasks by iterating through all statuses
+      std::vector<magic_core::TaskStatus> all_statuses = {
+        magic_core::TaskStatus::PENDING,
+        magic_core::TaskStatus::PROCESSING, 
+        magic_core::TaskStatus::COMPLETED,
+        magic_core::TaskStatus::FAILED
+      };
+      
+      for (const auto &status : all_statuses) {
+        auto tasks = task_queue_repo_->get_tasks_by_status(status);
+        for (const auto &task : tasks) {
+          nlohmann::json task_json;
+          task_json["id"] = task.id;
+          task_json["task_type"] = task.task_type;
+          task_json["status"] = magic_core::to_string(task.status);
+          task_json["priority"] = task.priority;
+          task_json["target_path"] = task.target_path;
+          task_json["target_tag"] = task.target_tag;
+          task_json["payload"] = task.payload;
+          task_json["error_message"] = task.error_message;
+          task_json["created_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.created_at);
+          task_json["updated_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.updated_at);
+          tasks_json.push_back(task_json);
+        }
+      }
+    }
+    
+    nlohmann::json response = create_success_response("Tasks retrieved successfully");
+    response["data"]["tasks"] = tasks_json;
+    response["data"]["count"] = tasks_json.size();
+    
+    return create_json_response(response);
+  } catch (const std::exception &e) {
+    std::cerr << "Exception in handle_list_tasks: " << e.what() << std::endl;
+    nlohmann::json error_response = create_error_response(e.what());
+    return create_json_response(error_response, 500);
+  }
+}
+
+crow::response Routes::handle_get_task_status(const crow::request &req, const std::string &task_id) {
+  try {
+    std::cout << "Getting task status for task ID: " << task_id << std::endl;
+    
+    long long id = std::stoll(task_id);
+    
+    // Get all tasks and find the matching one
+    std::vector<magic_core::TaskStatus> all_statuses = {
+      magic_core::TaskStatus::PENDING,
+      magic_core::TaskStatus::PROCESSING, 
+      magic_core::TaskStatus::COMPLETED,
+      magic_core::TaskStatus::FAILED
+    };
+    
+    for (const auto &status : all_statuses) {
+      auto tasks = task_queue_repo_->get_tasks_by_status(status);
+      for (const auto &task : tasks) {
+        if (task.id == id) {
+          nlohmann::json task_json;
+          task_json["id"] = task.id;
+          task_json["task_type"] = task.task_type;
+          task_json["status"] = magic_core::to_string(task.status);
+          task_json["priority"] = task.priority;
+          task_json["target_path"] = task.target_path;
+          task_json["target_tag"] = task.target_tag;
+          task_json["payload"] = task.payload;
+          task_json["error_message"] = task.error_message;
+          task_json["created_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.created_at);
+          task_json["updated_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.updated_at);
+          
+          nlohmann::json response = create_success_response("Task status retrieved successfully");
+          response["data"] = task_json;
+          return create_json_response(response);
+        }
+      }
+    }
+    
+    nlohmann::json error_response = create_error_response("Task not found");
+    return create_json_response(error_response, 404);
+    
+  } catch (const std::invalid_argument &e) {
+    nlohmann::json error_response = create_error_response("Invalid task ID format");
+    return create_json_response(error_response, 400);
+  } catch (const std::exception &e) {
+    std::cerr << "Exception in handle_get_task_status: " << e.what() << std::endl;
+    nlohmann::json error_response = create_error_response(e.what());
+    return create_json_response(error_response, 500);
+  }
+}
+
+crow::response Routes::handle_get_task_progress(const crow::request &req, const std::string &task_id) {
+  try {
+    std::cout << "Getting task progress for task ID: " << task_id << std::endl;
+    
+    long long id = std::stoll(task_id);
+    auto progress = task_queue_repo_->get_task_progress(id);
+    
+    if (!progress.has_value()) {
+      nlohmann::json error_response = create_error_response("Task progress not found");
+      return create_json_response(error_response, 404);
+    }
+    
+    nlohmann::json progress_json;
+    progress_json["task_id"] = progress->task_id;
+    progress_json["progress_percent"] = progress->progress_percent;
+    progress_json["status_message"] = progress->status_message;
+    progress_json["updated_at"] = progress->updated_at;
+    
+    nlohmann::json response = create_success_response("Task progress retrieved successfully");
+    response["data"] = progress_json;
+    return create_json_response(response);
+    
+  } catch (const std::invalid_argument &e) {
+    nlohmann::json error_response = create_error_response("Invalid task ID format");
+    return create_json_response(error_response, 400);
+  } catch (const std::exception &e) {
+    std::cerr << "Exception in handle_get_task_progress: " << e.what() << std::endl;
+    nlohmann::json error_response = create_error_response(e.what());
+    return create_json_response(error_response, 500);
+  }
+}
+
+crow::response Routes::handle_clear_completed_tasks(const crow::request &req) {
+  try {
+    std::cout << "Clearing completed tasks" << std::endl;
+    
+    // Parse optional days parameter from request body
+    int older_than_days = 7; // Default
+    if (!req.body.empty()) {
+      try {
+        auto json_body = parse_json_body(req.body);
+        older_than_days = json_body.value("older_than_days", 7);
+      } catch (const std::exception &e) {
+        // If JSON parsing fails, use default value
+        std::cout << "Using default older_than_days value due to parsing error: " << e.what() << std::endl;
+      }
+    }
+    
+    task_queue_repo_->clear_completed_tasks(older_than_days);
+    
+    nlohmann::json response = create_success_response("Completed tasks cleared successfully");
+    response["data"]["older_than_days"] = older_than_days;
+    return create_json_response(response);
+    
+  } catch (const std::exception &e) {
+    std::cerr << "Exception in handle_clear_completed_tasks: " << e.what() << std::endl;
+    nlohmann::json error_response = create_error_response(e.what());
+    return create_json_response(error_response, 500);
+  }
+}
+
 }  // namespace magic_api

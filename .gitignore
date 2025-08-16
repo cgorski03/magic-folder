@@ -59,3 +59,4 @@ watched_files/
 # MacOS files
 .DS_Store
 doing
+magicrc.json

@@ -1,10 +1,11 @@
 #include <gtest/gtest.h>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "../../common/utilities_test.hpp"
-#include "magic_core/db/task.hpp"
+#include "magic_core/db/models/task_dto.hpp"
 
 namespace magic_core {
 
@@ -21,7 +22,7 @@ TEST_F(TaskQueueRepoTest, CreateTask_BasicFunctionality) {
   std::string file_path = "/test/new_file.txt";
   int priority = 5;
 
-  long long task_id = task_queue_repo_->create_task(task_type, file_path, priority);
+  long long task_id = task_queue_repo_->create_file_process_task(task_type, file_path, priority);
 
   EXPECT_GT(task_id, 0);
 
@@ -29,7 +30,7 @@ TEST_F(TaskQueueRepoTest, CreateTask_BasicFunctionality) {
   ASSERT_EQ(pending_tasks.size(), 1);
   EXPECT_EQ(pending_tasks[0].id, task_id);
   EXPECT_EQ(pending_tasks[0].task_type, task_type);
-  EXPECT_EQ(pending_tasks[0].file_path, file_path);
+  EXPECT_EQ(pending_tasks[0].target_path, file_path);
   EXPECT_EQ(pending_tasks[0].status, TaskStatus::PENDING);
   EXPECT_EQ(pending_tasks[0].priority, priority);
 }
@@ -38,7 +39,7 @@ TEST_F(TaskQueueRepoTest, CreateTask_DefaultPriority) {
   std::string task_type = "PROCESS_NEW_FILE";
   std::string file_path = "/test/default_priority.txt";
 
-  long long task_id = task_queue_repo_->create_task(task_type, file_path);
+  long long task_id = task_queue_repo_->create_file_process_task(task_type, file_path);
   (void)task_id;
 
   auto pending_tasks = task_queue_repo_->get_tasks_by_status(TaskStatus::PENDING);
@@ -47,9 +48,9 @@ TEST_F(TaskQueueRepoTest, CreateTask_DefaultPriority) {
 }
 
 TEST_F(TaskQueueRepoTest, FetchAndClaimNextTask_BasicFunctionality) {
-  long long task1_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file1.txt", 5);
-  long long task2_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file2.txt", 1);
-  long long task3_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file3.txt", 10);
+  long long task1_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file1.txt", 5);
+  long long task2_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file2.txt", 1);
+  long long task3_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file3.txt", 10);
   (void)task1_id; (void)task3_id;
 
   auto claimed_task = task_queue_repo_->fetch_and_claim_next_task();
@@ -70,7 +71,7 @@ TEST_F(TaskQueueRepoTest, FetchAndClaimNextTask_NoTasksAvailable) {
 }
 
 TEST_F(TaskQueueRepoTest, UpdateTaskStatus_BasicFunctionality) {
-  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file.txt");
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
 
   task_queue_repo_->update_task_status(task_id, TaskStatus::COMPLETED);
 
@@ -84,7 +85,7 @@ TEST_F(TaskQueueRepoTest, UpdateTaskStatus_BasicFunctionality) {
 }
 
 TEST_F(TaskQueueRepoTest, MarkTaskAsFailed_BasicFunctionality) {
-  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file.txt");
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
   std::string error_message = "File not found";
 
   task_queue_repo_->mark_task_as_failed(task_id, error_message);
@@ -97,9 +98,9 @@ TEST_F(TaskQueueRepoTest, MarkTaskAsFailed_BasicFunctionality) {
 }
 
 TEST_F(TaskQueueRepoTest, GetTasksByStatus_MultipleStatuses) {
-  long long pending_task1 = task_queue_repo_->create_task("PROCESS_FILE", "/test/file1.txt", 5);
-  long long pending_task2 = task_queue_repo_->create_task("PROCESS_FILE", "/test/file2.txt", 1);
-  long long processing_task = task_queue_repo_->create_task("PROCESS_FILE", "/test/file3.txt", 3);
+  long long pending_task1 = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file1.txt", 5);
+  long long pending_task2 = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file2.txt", 1);
+  long long processing_task = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file3.txt", 3);
   (void)pending_task1; (void)pending_task2;
 
   task_queue_repo_->update_task_status(processing_task, TaskStatus::PROCESSING);
@@ -118,9 +119,9 @@ TEST_F(TaskQueueRepoTest, GetTasksByStatus_MultipleStatuses) {
 }
 
 TEST_F(TaskQueueRepoTest, ClearCompletedTasks_BasicFunctionality) {
-  long long pending_task = task_queue_repo_->create_task("PROCESS_FILE", "/test/file1.txt");
-  long long completed_task = task_queue_repo_->create_task("PROCESS_FILE", "/test/file2.txt");
-  long long failed_task = task_queue_repo_->create_task("PROCESS_FILE", "/test/file3.txt");
+  long long pending_task = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file1.txt");
+  long long completed_task = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file2.txt");
+  long long failed_task = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file3.txt");
   (void)pending_task;
 
   task_queue_repo_->update_task_status(completed_task, TaskStatus::COMPLETED);
@@ -139,9 +140,9 @@ TEST_F(TaskQueueRepoTest, ClearCompletedTasks_BasicFunctionality) {
 }
 
 TEST_F(TaskQueueRepoTest, TaskPriorityOrdering_CorrectOrder) {
-  long long task_low = task_queue_repo_->create_task("PROCESS_FILE", "/test/low.txt", 10);
-  long long task_high = task_queue_repo_->create_task("PROCESS_FILE", "/test/high.txt", 1);
-  long long task_med = task_queue_repo_->create_task("PROCESS_FILE", "/test/med.txt", 5);
+  long long task_low = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/low.txt", 10);
+  long long task_high = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/high.txt", 1);
+  long long task_med = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/med.txt", 5);
 
   auto first_task = task_queue_repo_->fetch_and_claim_next_task();
   auto second_task = task_queue_repo_->fetch_and_claim_next_task();
@@ -163,7 +164,7 @@ TEST_F(TaskQueueRepoTest, TaskPriorityOrdering_CorrectOrder) {
 TEST_F(TaskQueueRepoTest, TaskTimestamps_AreSetCorrectly) {
   auto before_create = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now());
 
-  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file.txt");
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
   (void)task_id;
 
   auto after_create = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now()) + std::chrono::seconds(1);
@@ -180,18 +181,253 @@ TEST_F(TaskQueueRepoTest, TaskTimestamps_AreSetCorrectly) {
 }
 
 TEST_F(TaskQueueRepoTest, TaskClaiming_AtomicOperation) {
-  long long task_id = task_queue_repo_->create_task("PROCESS_FILE", "/test/file.txt");
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
 
-  auto task1 = task_queue_repo_->fetch_and_claim_next_task();
-  auto task2 = task_queue_repo_->fetch_and_claim_next_task();
+  // Simulate concurrent claims using multiple threads
+  std::optional<TaskDTO> t1;
+  std::optional<TaskDTO> t2;
+  std::thread th1([&]{ t1 = task_queue_repo_->fetch_and_claim_next_task(); });
+  std::thread th2([&]{ t2 = task_queue_repo_->fetch_and_claim_next_task(); });
+  th1.join();
+  th2.join();
 
-  EXPECT_TRUE(task1.has_value());
-  EXPECT_FALSE(task2.has_value());
+  // Exactly one thread should get the task
+  EXPECT_NE(t1.has_value(), t2.has_value());
+  const std::optional<TaskDTO>& claimed = t1.has_value() ? t1 : t2;
+  ASSERT_TRUE(claimed.has_value());
+  EXPECT_EQ(claimed->id, task_id);
+  EXPECT_EQ(claimed->status, TaskStatus::PROCESSING);
+}
 
-  if (task1.has_value()) {
-    EXPECT_EQ(task1->id, task_id);
-    EXPECT_EQ(task1->status, TaskStatus::PROCESSING);
-  }
+// ============================================================================
+// Task Progress Tests
+// ============================================================================
+
+TEST_F(TaskQueueRepoTest, UpsertTaskProgress_BasicFunctionality) {
+  // Arrange
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
+  float progress_percent = 25.5f;
+  std::string status_message = "Processing chunks...";
+  
+  // Act
+  EXPECT_NO_THROW({
+    task_queue_repo_->upsert_task_progress(task_id, progress_percent, status_message);
+  });
+  
+  // Assert
+  auto progress = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(progress.has_value());
+  EXPECT_EQ(progress->task_id, task_id);
+  EXPECT_FLOAT_EQ(progress->progress_percent, progress_percent);
+  EXPECT_EQ(progress->status_message, status_message);
+  EXPECT_FALSE(progress->updated_at.empty());
+}
+
+TEST_F(TaskQueueRepoTest, UpsertTaskProgress_UpdateExistingProgress) {
+  // Arrange
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
+  
+  // Act - Insert initial progress
+  task_queue_repo_->upsert_task_progress(task_id, 10.0f, "Starting...");
+  
+  // Act - Update progress
+  task_queue_repo_->upsert_task_progress(task_id, 50.0f, "Halfway done...");
+  
+  // Assert - Should have updated, not duplicated
+  auto progress = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(progress.has_value());
+  EXPECT_EQ(progress->task_id, task_id);
+  EXPECT_FLOAT_EQ(progress->progress_percent, 50.0f);
+  EXPECT_EQ(progress->status_message, "Halfway done...");
+}
+
+TEST_F(TaskQueueRepoTest, UpsertTaskProgress_MultipleProgressUpdates) {
+  // Arrange
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
+  
+  // Act - Multiple sequential updates
+  task_queue_repo_->upsert_task_progress(task_id, 0.0f, "Starting");
+  task_queue_repo_->upsert_task_progress(task_id, 25.0f, "Quarter done");
+  task_queue_repo_->upsert_task_progress(task_id, 75.0f, "Almost finished");
+  task_queue_repo_->upsert_task_progress(task_id, 100.0f, "Complete");
+  
+  // Assert - Should only have the latest progress
+  auto progress = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(progress.has_value());
+  EXPECT_EQ(progress->task_id, task_id);
+  EXPECT_FLOAT_EQ(progress->progress_percent, 100.0f);
+  EXPECT_EQ(progress->status_message, "Complete");
+}
+
+TEST_F(TaskQueueRepoTest, GetTaskProgress_NonExistentTask_ReturnsEmpty) {
+  // Arrange
+  long long non_existent_task_id = 99999;
+  
+  // Act
+  auto progress = task_queue_repo_->get_task_progress(non_existent_task_id);
+  
+  // Assert
+  EXPECT_FALSE(progress.has_value());
+}
+
+TEST_F(TaskQueueRepoTest, UpsertTaskProgress_EdgeCaseValues) {
+  // Arrange
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
+  
+  // Test minimum values
+  task_queue_repo_->upsert_task_progress(task_id, 0.0f, "");
+  auto progress_min = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(progress_min.has_value());
+  EXPECT_FLOAT_EQ(progress_min->progress_percent, 0.0f);
+  EXPECT_EQ(progress_min->status_message, "");
+  
+  // Test maximum values
+  task_queue_repo_->upsert_task_progress(task_id, 100.0f, "Very long status message with lots of details about what is happening during this processing step");
+  auto progress_max = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(progress_max.has_value());
+  EXPECT_FLOAT_EQ(progress_max->progress_percent, 100.0f);
+  EXPECT_EQ(progress_max->status_message, "Very long status message with lots of details about what is happening during this processing step");
+  
+  // Test negative values (should still work)
+  task_queue_repo_->upsert_task_progress(task_id, -5.0f, "Error state");
+  auto progress_neg = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(progress_neg.has_value());
+  EXPECT_FLOAT_EQ(progress_neg->progress_percent, -5.0f);
+  EXPECT_EQ(progress_neg->status_message, "Error state");
+  
+  // Test over 100% (should still work)
+  task_queue_repo_->upsert_task_progress(task_id, 150.0f, "Over completion");
+  auto progress_over = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(progress_over.has_value());
+  EXPECT_FLOAT_EQ(progress_over->progress_percent, 150.0f);
+  EXPECT_EQ(progress_over->status_message, "Over completion");
+}
+
+TEST_F(TaskQueueRepoTest, UpsertTaskProgress_SpecialCharacters) {
+  // Arrange
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
+  std::string special_message = "Processing file with unicode: 测试 🚀 and symbols: !@#$%^&*()";
+  
+  // Act
+  task_queue_repo_->upsert_task_progress(task_id, 42.5f, special_message);
+  
+  // Assert
+  auto progress = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(progress.has_value());
+  EXPECT_EQ(progress->status_message, special_message);
+}
+
+TEST_F(TaskQueueRepoTest, TaskProgress_IndependentPerTask) {
+  // Arrange
+  long long task1_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file1.txt");
+  long long task2_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file2.txt");
+  
+  // Act - Set different progress for each task
+  task_queue_repo_->upsert_task_progress(task1_id, 30.0f, "Task 1 progress");
+  task_queue_repo_->upsert_task_progress(task2_id, 70.0f, "Task 2 progress");
+  
+  // Assert - Each task should have its own progress
+  auto progress1 = task_queue_repo_->get_task_progress(task1_id);
+  auto progress2 = task_queue_repo_->get_task_progress(task2_id);
+  
+  ASSERT_TRUE(progress1.has_value());
+  ASSERT_TRUE(progress2.has_value());
+  
+  EXPECT_EQ(progress1->task_id, task1_id);
+  EXPECT_FLOAT_EQ(progress1->progress_percent, 30.0f);
+  EXPECT_EQ(progress1->status_message, "Task 1 progress");
+  
+  EXPECT_EQ(progress2->task_id, task2_id);
+  EXPECT_FLOAT_EQ(progress2->progress_percent, 70.0f);
+  EXPECT_EQ(progress2->status_message, "Task 2 progress");
+}
+
+TEST_F(TaskQueueRepoTest, TaskProgress_TimestampUpdates) {
+  // Arrange
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
+  
+  // Act - First update
+  task_queue_repo_->upsert_task_progress(task_id, 25.0f, "First update");
+  auto progress1 = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(progress1.has_value());
+  std::string first_timestamp = progress1->updated_at;
+  
+  // Small delay to ensure timestamp difference (SQLite timestamps are second precision)
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+  
+  // Act - Second update
+  task_queue_repo_->upsert_task_progress(task_id, 50.0f, "Second update");
+  auto progress2 = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(progress2.has_value());
+  
+  // Assert - Timestamp should be updated
+  EXPECT_NE(progress2->updated_at, first_timestamp);
+  EXPECT_FLOAT_EQ(progress2->progress_percent, 50.0f);
+  EXPECT_EQ(progress2->status_message, "Second update");
+}
+
+TEST_F(TaskQueueRepoTest, TaskProgress_ConcurrentUpdates) {
+  // Arrange
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
+  
+  // Act - Concurrent progress updates
+  std::thread t1([&]() {
+    task_queue_repo_->upsert_task_progress(task_id, 25.0f, "Thread 1 update");
+  });
+  
+  std::thread t2([&]() {
+    task_queue_repo_->upsert_task_progress(task_id, 75.0f, "Thread 2 update");
+  });
+  
+  t1.join();
+  t2.join();
+  
+  // Assert - Should have one of the updates (database handles concurrency)
+  auto progress = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(progress.has_value());
+  EXPECT_EQ(progress->task_id, task_id);
+  // Progress should be one of the two values
+  EXPECT_TRUE(progress->progress_percent == 25.0f || progress->progress_percent == 75.0f);
+  EXPECT_TRUE(progress->status_message == "Thread 1 update" || progress->status_message == "Thread 2 update");
+}
+
+TEST_F(TaskQueueRepoTest, TaskProgress_IntegrationWithTaskLifecycle) {
+  // Arrange
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", "/test/file.txt");
+  
+  // Act & Assert - Test progress through task lifecycle
+  
+  // 1. Task created, no progress yet
+  auto initial_progress = task_queue_repo_->get_task_progress(task_id);
+  EXPECT_FALSE(initial_progress.has_value());
+  
+  // 2. Claim task and start progress
+  auto claimed_task = task_queue_repo_->fetch_and_claim_next_task();
+  ASSERT_TRUE(claimed_task.has_value());
+  EXPECT_EQ(claimed_task->status, TaskStatus::PROCESSING);
+  
+  task_queue_repo_->upsert_task_progress(task_id, 10.0f, "Starting processing");
+  auto start_progress = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(start_progress.has_value());
+  EXPECT_FLOAT_EQ(start_progress->progress_percent, 10.0f);
+  
+  // 3. Update progress during processing
+  task_queue_repo_->upsert_task_progress(task_id, 50.0f, "Halfway done");
+  task_queue_repo_->upsert_task_progress(task_id, 90.0f, "Almost finished");
+  
+  // 4. Complete task
+  task_queue_repo_->update_task_status(task_id, TaskStatus::COMPLETED);
+  task_queue_repo_->upsert_task_progress(task_id, 100.0f, "Task completed");
+  
+  // 5. Verify final state
+  auto final_progress = task_queue_repo_->get_task_progress(task_id);
+  ASSERT_TRUE(final_progress.has_value());
+  EXPECT_FLOAT_EQ(final_progress->progress_percent, 100.0f);
+  EXPECT_EQ(final_progress->status_message, "Task completed");
+  
+  auto completed_tasks = task_queue_repo_->get_tasks_by_status(TaskStatus::COMPLETED);
+  ASSERT_EQ(completed_tasks.size(), 1);
+  EXPECT_EQ(completed_tasks[0].id, task_id);
 }
 
 }  // namespace magic_core

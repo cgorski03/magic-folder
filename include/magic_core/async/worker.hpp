@@ -1,15 +1,16 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
 #include <thread>
-#include "magic_core/db/task.hpp"
 
 namespace magic_core {
 class MetadataStore;
 class OllamaClient;
-struct Task;
+struct TaskDTO;
 class ContentExtractorFactory;
 class TaskQueueRepo;
+class ServiceProvider;
 }
 
 namespace magic_core {
@@ -31,12 +32,9 @@ namespace async {
       /**
        * @brief Constructs a Worker instance.
        * @param worker_id A unique identifier for this worker, used for logging.
-       * @param queue A reference to the task queue repository for fetching jobs.
-       * @param store A reference to the metadata store for DB writes.
-       * @param ollama A reference to the Ollama client for AI operations.
-       * @param factory A reference to the content extractor factory.
+       * @param services A shared pointer to the service provider.
        */
-      Worker(int worker_id, MetadataStore& store, TaskQueueRepo& task_queue, OllamaClient& ollama, ContentExtractorFactory& factory);
+      Worker(int worker_id, std::shared_ptr<ServiceProvider> services);
   
       /**
        * @brief Destructor. Ensures the worker thread is stopped and joined cleanly.
@@ -76,21 +74,9 @@ namespace async {
        * This function continuously polls the task queue, executes tasks, and
        * sleeps when no work is available. It runs until stop() is called.
        */
-      void run_loop();
-
-      /**
-       * @brief Executes the full processing pipeline for a single task.
-       * @param task The task object fetched from the queue.
-       */
-       void execute_processing_task(const Task& task);
-  
-      int worker_id;
-  
-      MetadataStore& metadata_store;
-      TaskQueueRepo& task_queue_repo;
-      OllamaClient& ollama_client;
-      ContentExtractorFactory& extractor_factory;
-  
+      void run_loop();  
+      int worker_id_;
+      std::shared_ptr<ServiceProvider> services_;
       std::atomic<bool> should_stop{false};
       std::thread thread;
   };

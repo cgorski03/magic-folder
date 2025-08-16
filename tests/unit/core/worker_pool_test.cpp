@@ -5,6 +5,7 @@
 #include <memory>
 #include <thread>
 
+#include "magic_core/async/service_provider.hpp"
 #include "magic_core/async/worker_pool.hpp"
 #include "mocks_test.hpp"
 #include "utilities_test.hpp"
@@ -19,36 +20,43 @@ class WorkerPoolTest : public magic_tests::MetadataStoreTestBase {
  protected:
   void SetUp() override {
     magic_tests::MetadataStoreTestBase::SetUp();
-    mock_ollama_client_ = std::make_unique<StrictMock<MockOllamaClient>>();
-    mock_content_extractor_factory_ = std::make_unique<StrictMock<MockContentExtractorFactory>>();
+    mock_ollama_client_ = std::make_shared<StrictMock<MockOllamaClient>>();
+    mock_content_extractor_factory_ = std::make_shared<StrictMock<MockContentExtractorFactory>>();
+    
+    // Create service provider with all dependencies
+    service_provider_ = std::make_shared<ServiceProvider>(
+        metadata_store_, task_queue_repo_, mock_ollama_client_, mock_content_extractor_factory_
+    );
   }
 
   void TearDown() override {
+    service_provider_.reset();
     mock_content_extractor_factory_.reset();
     mock_ollama_client_.reset();
     magic_tests::MetadataStoreTestBase::TearDown();
   }
 
-  std::unique_ptr<StrictMock<MockOllamaClient>> mock_ollama_client_;
-  std::unique_ptr<StrictMock<MockContentExtractorFactory>> mock_content_extractor_factory_;
+  std::shared_ptr<ServiceProvider> service_provider_;
+  std::shared_ptr<StrictMock<MockOllamaClient>> mock_ollama_client_;
+  std::shared_ptr<StrictMock<MockContentExtractorFactory>> mock_content_extractor_factory_;
 };
 
 TEST_F(WorkerPoolTest, ConstructorThrowsOnZeroThreads) {
   EXPECT_THROW({
-    WorkerPool pool(0, *metadata_store_, *task_queue_repo_, *mock_ollama_client_, *mock_content_extractor_factory_);
+    WorkerPool pool(0, service_provider_);
   }, std::invalid_argument);
 }
 
 TEST_F(WorkerPoolTest, StopWithoutStartIsNoOp) {
   EXPECT_NO_THROW({
-    WorkerPool pool(1, *metadata_store_, *task_queue_repo_, *mock_ollama_client_, *mock_content_extractor_factory_);
+    WorkerPool pool(1, service_provider_);
     pool.stop();
   });
 }
 
 TEST_F(WorkerPoolTest, StartThenStopLifecycle_NoTasks) {
   EXPECT_NO_THROW({
-    WorkerPool pool(1, *metadata_store_, *task_queue_repo_, *mock_ollama_client_, *mock_content_extractor_factory_);
+    WorkerPool pool(1, service_provider_);
     pool.start();
     // Give the worker thread a brief moment to enter its loop
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
@@ -59,7 +67,7 @@ TEST_F(WorkerPoolTest, StartThenStopLifecycle_NoTasks) {
 
 TEST_F(WorkerPoolTest, StartTwiceShowsWarningAndNoThrow) {
   EXPECT_NO_THROW({
-    WorkerPool pool(1, *metadata_store_, *task_queue_repo_, *mock_ollama_client_, *mock_content_extractor_factory_);
+    WorkerPool pool(1, service_provider_);
     pool.start();
     // Second call should be a no-op with a warning, not an exception
     pool.start();
