@@ -15,7 +15,12 @@ namespace magic_cli
     List,
     Info,
     Delete,
-    Help
+    Help,
+    // Task management commands
+    ListTasks,
+    TaskStatus,
+    TaskProgress,
+    ClearTasks
   };
 
   struct CliOptions
@@ -28,6 +33,10 @@ namespace magic_cli
     bool verbose;
     bool help;
     bool magic_search;  // true for magic search (files + chunks), false for file-only search
+    // Task management options
+    std::string task_id;
+    std::string status_filter;
+    int older_than_days;
   };
 
   class CliError : public std::exception
@@ -82,6 +91,12 @@ namespace magic_cli
     void handle_info_command(const CliOptions &options);
     void handle_delete_command(const CliOptions &options);
     void handle_help_command(const CliOptions &options);
+    
+    // Task management command handlers
+    void handle_list_tasks_command(const CliOptions &options);
+    void handle_task_status_command(const CliOptions &options);
+    void handle_task_progress_command(const CliOptions &options);
+    void handle_clear_tasks_command(const CliOptions &options);
 
     // HTTP methods
     nlohmann::json make_get_request(const std::string &endpoint);
@@ -97,6 +112,11 @@ namespace magic_cli
     void print_error(const std::string &error);
     void print_help();
     std::string build_url(const std::string &endpoint);
+    
+    // Task management response printers
+    void print_task_list_response(const nlohmann::json &response);
+    void print_task_status_response(const nlohmann::json &response);
+    void print_task_progress_response(const nlohmann::json &response);
   };
 
 }

@@ -52,6 +52,7 @@ CliOptions CliHandler::parse_arguments(int argc, char* argv[]) {
     options.verbose = false;
     options.help = false;
     options.magic_search = true;  // Default to magic search
+    options.older_than_days = 7;  // Default for clearing tasks
     
     if (argc < 2) {
         options.command = Command::Help;
@@ -121,6 +122,64 @@ CliOptions CliHandler::parse_arguments(int argc, char* argv[]) {
         }
     } else if (command == "list" || command == "l") {
         options.command = Command::List;
+    } else if (command == "tasks" || command == "lt") {
+        options.command = Command::ListTasks;
+        // Parse optional status filter
+        for (int i = 2; i < argc; i += 2) {
+            if (i + 1 >= argc) break;
+            std::string flag = argv[i];
+            std::string value = argv[i + 1];
+            
+            if (flag == "--status" || flag == "-s") {
+                options.status_filter = value;
+            }
+        }
+    } else if (command == "task-status" || command == "ts") {
+        options.command = Command::TaskStatus;
+        if (argc < 4) {
+            throw CliError("Task status command requires a task ID. Usage: task-status --id <task_id>");
+        }
+        for (int i = 2; i < argc; i += 2) {
+            if (i + 1 >= argc) break;
+            std::string flag = argv[i];
+            std::string value = argv[i + 1];
+            
+            if (flag == "--id" || flag == "-i") {
+                options.task_id = value;
+            }
+        }
+        if (options.task_id.empty()) {
+            throw CliError("Task status command requires a task ID. Usage: task-status --id <task_id>");
+        }
+    } else if (command == "task-progress" || command == "tp") {
+        options.command = Command::TaskProgress;
+        if (argc < 4) {
+            throw CliError("Task progress command requires a task ID. Usage: task-progress --id <task_id>");
+        }
+        for (int i = 2; i < argc; i += 2) {
+            if (i + 1 >= argc) break;
+            std::string flag = argv[i];
+            std::string value = argv[i + 1];
+            
+            if (flag == "--id" || flag == "-i") {
+                options.task_id = value;
+            }
+        }
+        if (options.task_id.empty()) {
+            throw CliError("Task progress command requires a task ID. Usage: task-progress --id <task_id>");
+        }
+    } else if (command == "clear-tasks" || command == "ct") {
+        options.command = Command::ClearTasks;
+        // Parse optional days parameter
+        for (int i = 2; i < argc; i += 2) {
+            if (i + 1 >= argc) break;
+            std::string flag = argv[i];
+            std::string value = argv[i + 1];
+            
+            if (flag == "--days" || flag == "-d") {
+                options.older_than_days = std::stoi(value);
+            }
+        }
     } else if (command == "help" || command == "h" || command == "--help" || command == "-h") {
         options.command = Command::Help;
     } else {
@@ -152,6 +211,19 @@ void CliHandler::execute_command(const CliOptions& options) {
             break;
         case Command::Help:
             handle_help_command(options);
+            break;
+        // Task management commands
+        case Command::ListTasks:
+            handle_list_tasks_command(options);
+            break;
+        case Command::TaskStatus:
+            handle_task_status_command(options);
+            break;
+        case Command::TaskProgress:
+            handle_task_progress_command(options);
+            break;
+        case Command::ClearTasks:
+            handle_clear_tasks_command(options);
             break;
     }
 }
@@ -424,7 +496,7 @@ Magic Folder CLI - Intelligent File Management System
 
 Usage: magic_cli <command> [options]
 
-Commands:
+File Management Commands:
   process, p    Process a file for indexing
     --file, -f <path>    Path to the file to process
 
@@ -439,22 +511,253 @@ Commands:
 
   list, l       List all indexed files
 
+Task Management Commands:
+  tasks, lt     List all tasks in the queue
+    --status, -s <status>  Filter by task status (PENDING, PROCESSING, COMPLETED, FAILED)
+
+  task-status, ts  Get detailed status of a specific task
+    --id, -i <task_id>     Task ID to check
+
+  task-progress, tp  Get progress information for a specific task
+    --id, -i <task_id>     Task ID to check
+
+  clear-tasks, ct   Clear completed and failed tasks
+    --days, -d <num>       Clear tasks older than N days (default: 7)
+
+General:
   help, h       Show this help message
 
 Environment Variables:
   API_BASE_URL  Base URL for the Magic Folder API (default: http://127.0.0.1:3030)
 
 Examples:
+  # File operations
   magic_cli process --file /path/to/document.txt
   magic_cli search --query "machine learning algorithms" --top-k 10
   magic_cli search --query "python code" --files-only
   magic_cli filesearch --query "documentation" --top-k 5
   magic_cli list
+
+  # Task management
+  magic_cli tasks                           # List all tasks
+  magic_cli tasks --status PENDING         # List only pending tasks
+  magic_cli task-status --id 123           # Get status of task 123
+  magic_cli task-progress --id 123         # Get progress of task 123
+  magic_cli clear-tasks --days 30          # Clear tasks older than 30 days
 )" << std::endl;
 }
 
 std::string CliHandler::build_url(const std::string& endpoint) {
     return api_base_url_ + endpoint;
+}
+
+// ============================================================================
+// Task Management Command Handlers
+// ============================================================================
+
+void CliHandler::handle_list_tasks_command(const CliOptions& options) {
+    std::cout << "Listing tasks";
+    if (!options.status_filter.empty()) {
+        std::cout << " (status: " << options.status_filter << ")";
+    }
+    std::cout << std::endl;
+    
+    try {
+        std::string endpoint = "/tasks";
+        if (!options.status_filter.empty()) {
+            endpoint += "?status=" + options.status_filter;
+        }
+        
+        nlohmann::json response = make_get_request(endpoint);
+        print_task_list_response(response);
+    } catch (const std::exception& e) {
+        print_error("Failed to list tasks: " + std::string(e.what()));
+    }
+}
+
+void CliHandler::handle_task_status_command(const CliOptions& options) {
+    std::cout << "Getting status for task ID: " << options.task_id << std::endl;
+    
+    try {
+        std::string endpoint = "/tasks/" + options.task_id + "/status";
+        nlohmann::json response = make_get_request(endpoint);
+        print_task_status_response(response);
+    } catch (const std::exception& e) {
+        print_error("Failed to get task status: " + std::string(e.what()));
+    }
+}
+
+void CliHandler::handle_task_progress_command(const CliOptions& options) {
+    std::cout << "Getting progress for task ID: " << options.task_id << std::endl;
+    
+    try {
+        std::string endpoint = "/tasks/" + options.task_id + "/progress";
+        nlohmann::json response = make_get_request(endpoint);
+        print_task_progress_response(response);
+    } catch (const std::exception& e) {
+        print_error("Failed to get task progress: " + std::string(e.what()));
+    }
+}
+
+void CliHandler::handle_clear_tasks_command(const CliOptions& options) {
+    std::cout << "Clearing completed tasks older than " << options.older_than_days << " days" << std::endl;
+    
+    nlohmann::json request_data = {
+        {"older_than_days", options.older_than_days}
+    };
+    
+    try {
+        nlohmann::json response = make_post_request("/tasks/clear", request_data);
+        print_json_response(response);
+    } catch (const std::exception& e) {
+        print_error("Failed to clear tasks: " + std::string(e.what()));
+    }
+}
+
+// ============================================================================
+// Task Management Response Printers
+// ============================================================================
+
+void CliHandler::print_task_list_response(const nlohmann::json& response) {
+    std::cout << "\n=== Task Queue ===" << std::endl;
+    
+    if (response.contains("success") && response["success"].get<bool>() == true &&
+        response.contains("data") && response["data"].contains("tasks")) {
+        
+        auto tasks = response["data"]["tasks"];
+        int count = response["data"]["count"].get<int>();
+        
+        if (count == 0) {
+            std::cout << "No tasks found." << std::endl;
+            return;
+        }
+        
+        std::cout << "Found " << count << " task(s):\n" << std::endl;
+        
+        // Group tasks by status for better display
+        std::map<std::string, std::vector<nlohmann::json>> tasks_by_status;
+        for (const auto& task : tasks) {
+            std::string status = task["status"].get<std::string>();
+            tasks_by_status[status].push_back(task);
+        }
+        
+        // Display tasks grouped by status
+        for (const auto& [status, status_tasks] : tasks_by_status) {
+            std::cout << "=== " << status << " (" << status_tasks.size() << ") ===" << std::endl;
+            
+            for (const auto& task : status_tasks) {
+                std::cout << "  ID: " << task["id"].get<long long>()
+                          << " | Type: " << task["task_type"].get<std::string>()
+                          << " | Priority: " << task["priority"].get<int>();
+                
+                if (task.contains("target_path") && !task["target_path"].is_null()) {
+                    std::string path = task["target_path"].get<std::string>();
+                    if (path.length() > 50) {
+                        path = "..." + path.substr(path.length() - 47);
+                    }
+                    std::cout << " | File: " << path;
+                }
+                
+                if (task.contains("error_message") && !task["error_message"].is_null() && 
+                    !task["error_message"].get<std::string>().empty()) {
+                    std::string error = task["error_message"].get<std::string>();
+                    if (error.length() > 50) {
+                        error = error.substr(0, 47) + "...";
+                    }
+                    std::cout << " | Error: " << error;
+                }
+                
+                std::cout << std::endl;
+                std::cout << "    Created: " << task["created_at"].get<std::string>()
+                          << " | Updated: " << task["updated_at"].get<std::string>() << std::endl;
+                std::cout << std::endl;
+            }
+        }
+    } else if (response.contains("error")) {
+        std::cout << "Error: " << response["error"].get<std::string>() << std::endl;
+    } else {
+        std::cout << "Unexpected response format." << std::endl;
+    }
+}
+
+void CliHandler::print_task_status_response(const nlohmann::json& response) {
+    std::cout << "\n=== Task Status ===" << std::endl;
+    
+    if (response.contains("success") && response["success"].get<bool>() == true &&
+        response.contains("data")) {
+        
+        auto task = response["data"];
+        
+        std::cout << "Task ID: " << task["id"].get<long long>() << std::endl;
+        std::cout << "Type: " << task["task_type"].get<std::string>() << std::endl;
+        std::cout << "Status: " << task["status"].get<std::string>() << std::endl;
+        std::cout << "Priority: " << task["priority"].get<int>() << std::endl;
+        
+        if (task.contains("target_path") && !task["target_path"].is_null()) {
+            std::cout << "Target Path: " << task["target_path"].get<std::string>() << std::endl;
+        }
+        
+        if (task.contains("target_tag") && !task["target_tag"].is_null()) {
+            std::cout << "Target Tag: " << task["target_tag"].get<std::string>() << std::endl;
+        }
+        
+        if (task.contains("error_message") && !task["error_message"].is_null() && 
+            !task["error_message"].get<std::string>().empty()) {
+            std::cout << "Error: " << task["error_message"].get<std::string>() << std::endl;
+        }
+        
+        std::cout << "Created: " << task["created_at"].get<std::string>() << std::endl;
+        std::cout << "Updated: " << task["updated_at"].get<std::string>() << std::endl;
+        
+        if (task.contains("payload") && !task["payload"].is_null() && 
+            !task["payload"].get<std::string>().empty()) {
+            std::cout << "Payload: " << task["payload"].get<std::string>() << std::endl;
+        }
+        
+    } else if (response.contains("error")) {
+        std::cout << "Error: " << response["error"].get<std::string>() << std::endl;
+    } else {
+        std::cout << "Unexpected response format." << std::endl;
+    }
+}
+
+void CliHandler::print_task_progress_response(const nlohmann::json& response) {
+    std::cout << "\n=== Task Progress ===" << std::endl;
+    
+    if (response.contains("success") && response["success"].get<bool>() == true &&
+        response.contains("data")) {
+        
+        auto progress = response["data"];
+        
+        std::cout << "Task ID: " << progress["task_id"].get<long long>() << std::endl;
+        
+        float decimal_progress = progress["progress_percent"].get<float>();
+        float percent = decimal_progress * 100.0f;  // Convert decimal to percentage
+        std::cout << "Progress: " << std::fixed << std::setprecision(1) << percent << "%" << std::endl;
+        
+        // Create a simple progress bar
+        int bar_width = 40;
+        int filled = static_cast<int>(decimal_progress * bar_width);  // Use decimal for bar calculation
+        std::cout << "Progress: [";
+        for (int i = 0; i < bar_width; ++i) {
+            if (i < filled) {
+                std::cout << "=";
+            } else if (i == filled && percent > 0) {
+                std::cout << ">";
+            } else {
+                std::cout << " ";
+            }
+        }
+        std::cout << "] " << std::fixed << std::setprecision(1) << percent << "%" << std::endl;
+        
+        std::cout << "Status: " << progress["status_message"].get<std::string>() << std::endl;
+        std::cout << "Updated: " << progress["updated_at"].get<std::string>() << std::endl;
+        
+    } else if (response.contains("error")) {
+        std::cout << "Error: " << response["error"].get<std::string>() << std::endl;
+    } else {
+        std::cout << "Unexpected response format." << std::endl;
+    }
 }
 
 } // namespace magic_cli 

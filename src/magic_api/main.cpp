@@ -66,7 +66,7 @@ int main() {
     int port = std::stoi(server_url.substr(server_url.find(':') + 1));
     magic_api::Server server(host, port);
     magic_api::Routes routes(file_processing_service, file_delete_service, file_info_service,
-                             search_service);
+                             search_service, task_queue_repo);
     routes.register_routes(server);
 
     // --- 2. START BACKGROUND SERVICES ---
@@ -97,8 +97,6 @@ int main() {
     db_manager.shutdown();
 
     std::cout << "Shutdown complete." << std::endl;
-    // Start the server
-    server.start();
   } catch (const std::exception& e) {
     std::cerr << "Error starting server: " << e.what() << std::endl;
     return 1;
