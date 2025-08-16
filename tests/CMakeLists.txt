@@ -17,6 +17,9 @@ set(ALL_TEST_SOURCES
     # Unit test sources
     unit/core/worker_test.cpp
     unit/core/worker_pool_test.cpp
+    unit/core/task_factory_test.cpp
+    unit/core/process_file_task_test.cpp
+    unit/core/service_provider_test.cpp
     unit/services/compression_service_test.cpp
     unit/services/file_processing_service_test.cpp
     unit/services/search_service_test.cpp
@@ -27,6 +30,9 @@ set(ALL_TEST_SOURCES
     unit/db/metadata_store_test.cpp
     unit/db/file_info_service_test.cpp
     unit/db/file_delete_service_test.cpp
+    unit/db/task_repo_test.cpp
+    unit/db/connection_pool_test.cpp
+    unit/db/database_manager_test.cpp
     unit/api/config_test.cpp
 )
 

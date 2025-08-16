@@ -6,6 +6,7 @@
 #include <fstream>
 #include <set>
 
+#include "magic_core/async/service_provider.hpp"
 #include "magic_core/async/worker.hpp"
 #include "magic_core/db/metadata_store.hpp"
 #include "mocks_test.hpp"
@@ -25,22 +26,22 @@ class WorkerTest : public magic_tests::MetadataStoreTestBase {
     magic_tests::MetadataStoreTestBase::SetUp();
     
     // Create mock dependencies
-    mock_ollama_client_ = std::make_unique<StrictMock<MockOllamaClient>>();
-    mock_content_extractor_factory_ = std::make_unique<StrictMock<MockContentExtractorFactory>>();
+    mock_ollama_client_ = std::make_shared<StrictMock<MockOllamaClient>>();
+    mock_content_extractor_factory_ = std::make_shared<StrictMock<MockContentExtractorFactory>>();
     mock_content_extractor_ = std::make_unique<StrictMock<MockContentExtractor>>();
     
-    // Create worker with mocked dependencies
-    worker_ = std::make_unique<Worker>(
-        1, // worker_id
-        *metadata_store_,
-        *task_queue_repo_,
-        *mock_ollama_client_,
-        *mock_content_extractor_factory_
+    // Create service provider with all dependencies
+    service_provider_ = std::make_shared<ServiceProvider>(
+        metadata_store_, task_queue_repo_, mock_ollama_client_, mock_content_extractor_factory_
     );
+    
+    // Create worker with service provider
+    worker_ = std::make_unique<Worker>(1, service_provider_);
   }
 
   void TearDown() override {
     worker_.reset();
+    service_provider_.reset();
     mock_content_extractor_.reset();
     mock_content_extractor_factory_.reset();
     mock_ollama_client_.reset();
@@ -64,6 +65,7 @@ class WorkerTest : public magic_tests::MetadataStoreTestBase {
   }
 
   std::unique_ptr<Worker> worker_;
+  std::shared_ptr<ServiceProvider> service_provider_;
   std::shared_ptr<StrictMock<MockOllamaClient>> mock_ollama_client_;
   std::shared_ptr<StrictMock<MockContentExtractorFactory>> mock_content_extractor_factory_;
   std::shared_ptr<StrictMock<MockContentExtractor>> mock_content_extractor_;
@@ -122,7 +124,7 @@ TEST_F(WorkerTest, RunOneTaskWithPendingTask) {
   // Verify the task status was updated to COMPLETED
   auto completed_tasks = task_queue_repo_->get_tasks_by_status(TaskStatus::COMPLETED);
   EXPECT_FALSE(completed_tasks.empty());
-  EXPECT_EQ(completed_tasks[0].file_path, test_file_path.string());
+  EXPECT_EQ(completed_tasks[0].target_path.value(), test_file_path.string());
   
   // Verify file metadata was created
   auto file_metadata = metadata_store_->get_file_metadata(test_file_path.string());
@@ -167,7 +169,7 @@ TEST_F(WorkerTest, RunOneTaskWithFailedExtraction) {
   // Verify the task status was updated to FAILED
   auto failed_tasks = task_queue_repo_->get_tasks_by_status(TaskStatus::FAILED);
   EXPECT_FALSE(failed_tasks.empty());
-  EXPECT_EQ(failed_tasks[0].file_path, test_file_path.string());
+  EXPECT_EQ(failed_tasks[0].target_path.value(), test_file_path.string());
   
   cleanup_test_file(test_file_path);
 }
@@ -175,7 +177,7 @@ TEST_F(WorkerTest, RunOneTaskWithFailedExtraction) {
 TEST_F(WorkerTest, RunOneTaskWithNonExistentFile) {
   // Create a task for a file that doesn't exist
   const std::string non_existent_path = "/path/to/nonexistent/file.txt";
-  long long task_id = task_queue_repo_->create_file_process_task("FILE_PROCESSING", non_existent_path);
+  long long task_id = task_queue_repo_->create_file_process_task("PROCESS_FILE", non_existent_path);
   EXPECT_GT(task_id, 0);
   
   // Run the task
@@ -187,19 +189,16 @@ TEST_F(WorkerTest, RunOneTaskWithNonExistentFile) {
   // Verify the task status was updated to FAILED
   auto failed_tasks = task_queue_repo_->get_tasks_by_status(TaskStatus::FAILED);
   EXPECT_FALSE(failed_tasks.empty());
-  EXPECT_EQ(failed_tasks[0].file_path, "/path/to/nonexistent/file.txt");
+  EXPECT_EQ(failed_tasks[0].target_path.value(), "/path/to/nonexistent/file.txt");
 }
 
 TEST_F(WorkerTest, WorkerLifecycle) {
   // Test that worker can be created and destroyed without issues
   EXPECT_NO_THROW({
-    auto test_worker = std::make_unique<Worker>(
-        2, // different worker_id
-        *metadata_store_,
-        *task_queue_repo_,
-        *mock_ollama_client_,
-        *mock_content_extractor_factory_
+    auto test_service_provider = std::make_shared<ServiceProvider>(
+        metadata_store_, task_queue_repo_, mock_ollama_client_, mock_content_extractor_factory_
     );
+    auto test_worker = std::make_unique<Worker>(2, test_service_provider);
     
     // Worker should be able to check for tasks even if none exist
     bool result = test_worker->run_one_task();
@@ -239,8 +238,8 @@ TEST_F(WorkerTest, MultipleTasksProcessedSequentially) {
   }
   
   // Create tasks for both files
-  long long task_id1 = task_queue_repo_->create_file_process_task("FILE_PROCESSING", test_file1.string());
-  long long task_id2 = task_queue_repo_->create_file_process_task("FILE_PROCESSING", test_file2.string());
+  long long task_id1 = task_queue_repo_->create_file_process_task("PROCESS_FILE", test_file1.string());
+  long long task_id2 = task_queue_repo_->create_file_process_task("PROCESS_FILE", test_file2.string());
   
   // Set up mock expectations for both tasks
   ExtractionResult mock_extraction_result;
@@ -277,7 +276,7 @@ TEST_F(WorkerTest, MultipleTasksProcessedSequentially) {
   // Check that both file paths are in the completed tasks
   std::set<std::string> completed_paths;
   for (const auto& task : completed_tasks) {
-    completed_paths.insert(task.file_path);
+    completed_paths.insert(task.target_path.value());
   }
   EXPECT_TRUE(completed_paths.count(test_file1.string()));
   EXPECT_TRUE(completed_paths.count(test_file2.string()));
