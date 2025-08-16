@@ -103,25 +103,25 @@ void DatabaseManager::setup_schema(const std::filesystem::path& db_path,
   db << R"(
       CREATE TABLE IF NOT EXISTS task_queue (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          task_‰type TEXT NOT NULL,
+          task_type TEXT NOT NULL,
           status TEXT DEFAULT 'PENDING',
           priority INTEGER DEFAULT 10,
           error_message TEXT,
           created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
+          updated_at TEXT NOT NULL,
           target_path TEXT NULL, -- Used by PROCESS_FILE, DELETE_FILE, etc.
           target_tag TEXT NULL,  -- Used by RETROACTIVE_TAG, RENAME_TAG, etc.
           payload TEXT NULL      -- For less common or complex arguments like 'keywords'
       )
     )";
   db << R"(
-        CREATE TABLE task_progress (
+        CREATE TABLE IF NOT EXISTS task_progress (
         task_id INTEGER PRIMARY KEY, -- This is a FOREIGN KEY to task_queue.id
         progress_percent REAL NOT NULL DEFAULT 0.0,
         status_message TEXT NOT NULL DEFAULT 'Initializing...',
         updated_at TEXT NOT NULL,
-        FOREIGN KEY (task_id) REFERENCES TaskQueue(id) ON DELETE CASCADE
-    );
+        FOREIGN KEY (task_id) REFERENCES task_queue(id) ON DELETE CASCADE
+    )
     )";
   db << R"(
       CREATE INDEX IF NOT EXISTS idx_task_queue_status_priority 

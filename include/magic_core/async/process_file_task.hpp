@@ -1,3 +1,5 @@
+#pragma once
+
 #include "magic_core/async/ITask.hpp"
 #include <vector>
 #include <chrono> 

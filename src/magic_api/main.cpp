@@ -5,6 +5,7 @@
 #include "magic_api/config.hpp"
 #include "magic_api/routes.hpp"
 #include "magic_api/server.hpp"
+#include "magic_core/async/service_provider.hpp"
 #include "magic_core/async/worker_pool.hpp"
 #include "magic_core/db/database_manager.hpp"
 #include "magic_core/db/metadata_store.hpp"
@@ -57,10 +58,10 @@ int main() {
     auto file_info_service = std::make_shared<magic_core::FileInfoService>(metadata_store);
     auto search_service =
         std::make_shared<magic_core::SearchService>(metadata_store, ollama_client);
-
-    auto worker_pool = std::make_shared<magic_core::async::WorkerPool>(
-        config.num_workers, *metadata_store, *task_queue_repo, *ollama_client,
-        *content_extractor_factory);
+    auto services = std::make_shared<magic_core::ServiceProvider>(
+        metadata_store, task_queue_repo, ollama_client, content_extractor_factory);
+    auto worker_pool =
+        std::make_shared<magic_core::async::WorkerPool>(config.num_workers, services);
     std::string host = server_url.substr(0, server_url.find(':'));
     int port = std::stoi(server_url.substr(server_url.find(':') + 1));
     magic_api::Server server(host, port);
@@ -71,7 +72,7 @@ int main() {
     // --- 2. START BACKGROUND SERVICES ---
     std::cout << "Disabling Crow's internal signal handling..." << std::endl;
     server.get_app().signal_clear();
-    
+
     worker_pool->start();
     server.start();
     std::cout << "Server started successfully. Press Ctrl+C to exit." << std::endl;

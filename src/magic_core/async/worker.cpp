@@ -2,21 +2,18 @@
 
 #include <iostream>
 
-#include "magic_core/async/task_factory.hpp"
-#include "magic_core/async/service_provider.hpp"
-#include "magic_core/db/task_queue_repo.hpp"
 #include "magic_core/async/ITask.hpp"
+#include "magic_core/async/service_provider.hpp"
+#include "magic_core/async/task_factory.hpp"
 #include "magic_core/db/models/task_dto.hpp"
+#include "magic_core/db/task_queue_repo.hpp"
 
 namespace magic_core {
 namespace async {
 
-Worker::Worker(int worker_id,
-               ServiceProvider& services)
-    : worker_id_(worker_id),
-      services_(services) {
+Worker::Worker(int worker_id, std::shared_ptr<ServiceProvider> services)
+    : worker_id_(worker_id), services_(services) {
   std::cout << "Worker [" << worker_id_ << "] created." << std::endl;
-  
 }
 
 Worker::~Worker() {
@@ -48,7 +45,7 @@ void Worker::stop() {
 
 void Worker::run_loop() {
   std::cout << "Worker [" << worker_id_ << "] starting run loop." << std::endl;
-  TaskQueueRepo& task_repo = services_.get_task_queue_repo();
+  TaskQueueRepo& task_repo = services_->get_task_queue_repo();
 
   while (!should_stop.load()) {
     std::optional<TaskDTO> task_dto = task_repo.fetch_and_claim_next_task();
@@ -57,8 +54,11 @@ void Worker::run_loop() {
       ITaskPtr task = nullptr;
       try {
         task = TaskFactory::create_task(*task_dto);
+        if (!task) {
+          throw std::runtime_error("TaskFactory returned null task for task type: " + task_dto->task_type);
+        }
 
-        task->execute(services_, [&](float p, const std::string& msg) {
+        task->execute(*services_, [&](float p, const std::string& msg) {
           task_repo.upsert_task_progress(task_dto->id, p, msg);
         });
         task_repo.update_task_status(task_dto->id, TaskStatus::COMPLETED);
@@ -78,22 +78,25 @@ void Worker::run_loop() {
 bool Worker::run_one_task() {
   std::cout << "Worker [" << worker_id_ << "] running a single synchronous cycle..." << std::endl;
 
-  std::optional<TaskDTO> task_opt = services_.get_task_queue_repo().fetch_and_claim_next_task();
+  std::optional<TaskDTO> task_opt = services_->get_task_queue_repo().fetch_and_claim_next_task();
 
   if (task_opt.has_value()) {
-    std::cout << "Worker [" << worker_id_ << "] found task for file: " << task_opt->id
-              << std::endl;
-      auto on_progress = [&](float p, const std::string& msg) {
-        services_.get_task_queue_repo().upsert_task_progress(task_opt->id, p, msg);
-      };
-      
+    std::cout << "Worker [" << worker_id_ << "] found task for file: " << task_opt->id << std::endl;
+    auto on_progress = [&](float p, const std::string& msg) {
+      services_->get_task_queue_repo().upsert_task_progress(task_opt->id, p, msg);
+    };
+
     try {
       auto task = TaskFactory::create_task(*task_opt);
-      task->execute(services_, on_progress);
+      if (!task) {
+        throw std::runtime_error("TaskFactory returned null task for task type: " + task_opt->task_type);
+      }
+      task->execute(*services_, on_progress);
+      services_->get_task_queue_repo().update_task_status(task_opt->id, TaskStatus::COMPLETED);
     } catch (const std::exception& e) {
-      services_.get_task_queue_repo().mark_task_as_failed(task_opt->id, e.what());
-      std::cerr << "Worker [" << worker_id_ << "] CRITICAL ERROR processing file "
-                << task_opt->id << ": " << e.what() << std::endl;
+      services_->get_task_queue_repo().mark_task_as_failed(task_opt->id, e.what());
+      std::cerr << "Worker [" << worker_id_ << "] CRITICAL ERROR processing file " << task_opt->id
+                << ": " << e.what() << std::endl;
       return true;
     }
     return true;
@@ -103,5 +106,5 @@ bool Worker::run_one_task() {
   }
 }
 
-}
+}  // namespace async
 }  // namespace magic_core
