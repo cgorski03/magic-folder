@@ -39,6 +39,10 @@ class TaskQueueRepo {
   void upsert_task_progress(long long task_id, float percent, const std::string& message);
   std::optional<TaskProgressDTO> get_task_progress(long long task_id);
 
+  // File watcher convenience methods
+  void enqueue_process_file(const std::string& file_path, int priority = 10);
+  void enqueue_reindex_file(const std::string& file_path, int priority = 8);
+
   // Utility functions for time conversion
   static std::string time_point_to_string(const std::chrono::system_clock::time_point& tp);
   static std::chrono::system_clock::time_point string_to_time_point(const std::string& time_str);

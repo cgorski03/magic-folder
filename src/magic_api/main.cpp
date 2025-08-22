@@ -1,10 +1,12 @@
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 
 #include "magic_api/config.hpp"
 #include "magic_api/routes.hpp"
 #include "magic_api/server.hpp"
+#include "magic_core/async/file_watcher_service.hpp"
 #include "magic_core/async/service_provider.hpp"
 #include "magic_core/async/worker_pool.hpp"
 #include "magic_core/db/database_manager.hpp"
@@ -43,6 +45,10 @@ int main() {
     std::cout << "Metadata DB Path: " << metadata_path << std::endl;
     std::cout << "Ollama URL: " << ollama_server_url << std::endl;
     std::cout << "Embedding Model: " << model << std::endl;
+    std::cout << "File Watcher Enabled: " << (config.file_watcher_enabled ? "Yes" : "No") << std::endl;
+    if (config.file_watcher_enabled) {
+      std::cout << "Watch Directory: " << config.watch_directory << std::endl;
+    }
 
     // Initialize core components
     auto ollama_client = std::make_shared<magic_core::OllamaClient>(ollama_server_url, model);
@@ -62,6 +68,26 @@ int main() {
         metadata_store, task_queue_repo, ollama_client, content_extractor_factory);
     auto worker_pool =
         std::make_shared<magic_core::async::WorkerPool>(config.num_workers, services);
+
+    // Initialize file watcher service if enabled
+    std::unique_ptr<magic_core::async::FileWatcherService> file_watcher;
+    if (config.file_watcher_enabled) {
+      magic_core::async::WatchConfig watch_config;
+      watch_config.drop_root = config.watch_directory;
+      watch_config.recursive = true;
+      watch_config.settle_ms = std::chrono::milliseconds(config.file_watcher_settle_ms);
+      watch_config.modify_quiesce_ms = std::chrono::minutes(config.file_watcher_modify_quiesce_minutes);
+      
+      // Create watch directory if it doesn't exist
+      std::error_code ec;
+      std::filesystem::create_directories(watch_config.drop_root, ec);
+      if (ec) {
+        std::cerr << "Warning: Failed to create watch directory: " << ec.message() << std::endl;
+      }
+      
+      file_watcher = std::make_unique<magic_core::async::FileWatcherService>(
+          watch_config, *task_queue_repo, *metadata_store);
+    }
     std::string host = server_url.substr(0, server_url.find(':'));
     int port = std::stoi(server_url.substr(server_url.find(':') + 1));
     magic_api::Server server(host, port);
@@ -74,6 +100,16 @@ int main() {
     server.get_app().signal_clear();
 
     worker_pool->start();
+    
+    // Start file watcher if enabled
+    if (file_watcher) {
+      std::cout << "Starting file watcher service..." << std::endl;
+      file_watcher->start();
+      // Perform initial scan to pick up existing files
+      file_watcher->initial_scan();
+      std::cout << "File watcher started and initial scan completed." << std::endl;
+    }
+    
     server.start();
     std::cout << "Server started successfully. Press Ctrl+C to exit." << std::endl;
 
@@ -87,13 +123,18 @@ int main() {
     }
 
     // --- 4. GRACEFUL SHUTDOWN SEQUENCE ---
-    std::cout << "[1/3] Stopping API server to refuse new requests..." << std::endl;
+    std::cout << "[1/4] Stopping API server to refuse new requests..." << std::endl;
     server.stop();
 
-    std::cout << "[2/3] Stopping worker pool to finish processing..." << std::endl;
+    std::cout << "[2/4] Stopping file watcher..." << std::endl;
+    if (file_watcher) {
+      file_watcher->stop();
+    }
+
+    std::cout << "[3/4] Stopping worker pool to finish processing..." << std::endl;
     worker_pool->stop();  // Blocks until all workers are done
 
-    std::cout << "[3/3] Shutting down database connections..." << std::endl;
+    std::cout << "[4/4] Shutting down database connections..." << std::endl;
     db_manager.shutdown();
 
     std::cout << "Shutdown complete." << std::endl;

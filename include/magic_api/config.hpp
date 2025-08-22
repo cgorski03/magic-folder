@@ -13,6 +13,12 @@ class Config {
   std::string ollama_url;
   std::string embedding_model;
   int num_workers;
+  
+  // File watcher configuration
+  std::string watch_directory;
+  bool file_watcher_enabled;
+  int file_watcher_settle_ms;
+  int file_watcher_modify_quiesce_minutes;
 
   // Load configuration from a JSON file at the given path
   static Config from_file(const std::string& filename) {
@@ -40,6 +46,12 @@ class Config {
     config.metadata_db_path = json_config.value("metadata_db_path", std::string("./data/metadata.db"));
     config.ollama_url = json_config.value("ollama_url", std::string("http://localhost:11434"));
     config.embedding_model = json_config.value("embedding_model", std::string("mxbai-embed-large"));
+    
+    // File watcher defaults
+    config.watch_directory = json_config.value("watch_directory", std::string("./data/watch"));
+    config.file_watcher_enabled = json_config.value("file_watcher_enabled", true);
+    config.file_watcher_settle_ms = json_config.value("file_watcher_settle_ms", 1500);
+    config.file_watcher_modify_quiesce_minutes = json_config.value("file_watcher_modify_quiesce_minutes", 5);
 
     // Handle integer with default and basic type safety
     try {
@@ -73,6 +85,15 @@ class Config {
     }
     if (num_workers <= 0) {
       throw std::runtime_error("num_workers must be greater than 0");
+    }
+    if (file_watcher_enabled && watch_directory.empty()) {
+      throw std::runtime_error("watch_directory cannot be empty when file_watcher_enabled is true");
+    }
+    if (file_watcher_settle_ms < 100) {
+      throw std::runtime_error("file_watcher_settle_ms must be at least 100ms");
+    }
+    if (file_watcher_modify_quiesce_minutes < 1) {
+      throw std::runtime_error("file_watcher_modify_quiesce_minutes must be at least 1 minute");
     }
   }
 };

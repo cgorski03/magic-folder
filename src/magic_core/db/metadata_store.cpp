@@ -651,5 +651,25 @@ std::string MetadataStore::int_vector_to_comma_string(const std::vector<int> &ve
   return ss.str();
 }
 
+void MetadataStore::update_path_if_exists(const std::string& old_path, const std::string& new_path) {
+  try {
+    PooledConnection conn(db_manager_);
+    *conn << "UPDATE files SET path = ?, original_path = ? WHERE path = ?"
+          << new_path << new_path << old_path;
+  } catch (const sqlite::sqlite_exception& e) {
+    throw MetadataStoreError("Failed to update file path: " + std::string(e.what()));
+  }
+}
+
+void MetadataStore::mark_removed_if_exists(const std::string& path) {
+  try {
+    PooledConnection conn(db_manager_);
+    std::string removed_status = to_string(ProcessingStatus::FAILED); // Mark as failed for now
+    *conn << "UPDATE files SET processing_status = ? WHERE path = ?"
+          << removed_status << path;
+  } catch (const sqlite::sqlite_exception& e) {
+    throw MetadataStoreError("Failed to mark file as removed: " + std::string(e.what()));
+  }
+}
 
 }

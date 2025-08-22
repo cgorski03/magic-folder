@@ -12,6 +12,14 @@ file(GLOB_RECURSE LLM_SOURCES "llm/*.cpp")
 file(GLOB_RECURSE DB_SOURCES "db/*.cpp")
 file(GLOB_RECURSE ASYNC_SOURCES "async/*.cpp")
 
+# Handle macOS-specific Objective-C++ files
+if(APPLE)
+    file(GLOB_RECURSE ASYNC_MM_SOURCES "async/*.mm")
+    list(APPEND ASYNC_SOURCES ${ASYNC_MM_SOURCES})
+    # Enable Objective-C++ language
+    enable_language(OBJCXX)
+endif()
+
 # Combine all sources
 list(APPEND MAGIC_CORE_SOURCES 
     ${SERVICES_SOURCES}

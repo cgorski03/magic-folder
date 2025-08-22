@@ -20,6 +20,7 @@ set(ALL_TEST_SOURCES
     unit/core/task_factory_test.cpp
     unit/core/process_file_task_test.cpp
     unit/core/service_provider_test.cpp
+    unit/core/file_watcher_service_test.cpp
     unit/services/compression_service_test.cpp
     unit/services/file_processing_service_test.cpp
     unit/services/search_service_test.cpp
