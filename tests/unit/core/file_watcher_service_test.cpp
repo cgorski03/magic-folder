@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "magic_core/async/file_watcher_service.hpp"
+#include "magic_core/services/file_processing_service.hpp"
 #include "magic_core/types/chunk.hpp"
 #include "utilities_test.hpp"
 
@@ -42,6 +43,15 @@ private:
   Handler handler_;
 };
 
+// Mock FileProcessingService for testing
+class MockFileProcessingService : public magic_core::FileProcessingService {
+public:
+  // We need to provide a constructor since FileProcessingService doesn't have a default one
+  MockFileProcessingService() : FileProcessingService(nullptr, nullptr, nullptr, nullptr) {}
+  
+  MOCK_METHOD(std::optional<long long>, request_processing, (const std::filesystem::path& file_path), (override));
+};
+
 // Test fixture that uses mocked backend
 class FileWatcherServiceTest : public MetadataStoreTestBase {
 protected:
@@ -66,9 +76,23 @@ protected:
     mock_backend_ = std::make_unique<StrictMock<MockFileWatcherBackend>>();
     mock_backend_ptr_ = mock_backend_.get();
     
+    // Create mock file processing service
+    mock_file_processing_service_ = std::make_unique<NiceMock<MockFileProcessingService>>();
+    
+    // Configure mock to return task IDs and create actual tasks in TaskQueueRepo
+    ON_CALL(*mock_file_processing_service_, request_processing(_))
+        .WillByDefault([this](const std::filesystem::path& path) -> std::optional<long long> {
+          // Simulate what FileProcessingService would do: create a task in the repo
+          try {
+            return task_queue_repo_->create_file_process_task("PROCESS_FILE", path.string(), 10);
+          } catch (...) {
+            return std::nullopt;
+          }
+        });
+    
     // Create testable file watcher service
     file_watcher_ = std::make_unique<TestableFileWatcherService>(
-        watch_config_, *task_queue_repo_, *metadata_store_, std::move(mock_backend_));
+        watch_config_, *mock_file_processing_service_, *task_queue_repo_, *metadata_store_, std::move(mock_backend_));
   }
 
   void TearDown() override {
@@ -140,10 +164,11 @@ protected:
   class TestableFileWatcherService : public magic_core::async::FileWatcherService {
   public:
     TestableFileWatcherService(const magic_core::async::WatchConfig& cfg,
-                              magic_core::TaskQueueRepo& tasks,
+                              magic_core::FileProcessingService& file_processing_service,
+                              magic_core::TaskQueueRepo& task_queue_repo,
                               magic_core::MetadataStore& metadata,
                               std::unique_ptr<magic_core::async::IFileWatcherBackend> backend)
-        : FileWatcherService(cfg, tasks, metadata) {
+        : FileWatcherService(cfg, file_processing_service, task_queue_repo, metadata) {
       // Replace the backend created in the constructor
       backend_ = std::move(backend);
       
@@ -168,6 +193,7 @@ protected:
   std::unique_ptr<TestableFileWatcherService> file_watcher_;
   std::unique_ptr<StrictMock<MockFileWatcherBackend>> mock_backend_;
   StrictMock<MockFileWatcherBackend>* mock_backend_ptr_;
+  std::unique_ptr<NiceMock<MockFileProcessingService>> mock_file_processing_service_;
 };
 
 // Basic functionality tests
@@ -380,7 +406,7 @@ TEST_F(FileWatcherServiceTest, SettleLogicWaitsForStableFiles) {
   // Use longer settle time for this test
   watch_config_.settle_ms = std::chrono::milliseconds(200);
   auto test_watcher = std::make_unique<TestableFileWatcherService>(
-      watch_config_, *task_queue_repo_, *metadata_store_, 
+      watch_config_, *mock_file_processing_service_, *task_queue_repo_, *metadata_store_, 
       std::make_unique<NiceMock<MockFileWatcherBackend>>());
   
   auto* test_backend = static_cast<NiceMock<MockFileWatcherBackend>*>(test_watcher->get_backend());
@@ -421,7 +447,7 @@ TEST_F(FileWatcherServiceTest, ReindexesDirtyFilesAfterQuiescence) {
   watch_config_.sweep_interval = std::chrono::milliseconds(50);
   
   auto test_watcher = std::make_unique<TestableFileWatcherService>(
-      watch_config_, *task_queue_repo_, *metadata_store_, 
+      watch_config_, *mock_file_processing_service_, *task_queue_repo_, *metadata_store_, 
       std::make_unique<NiceMock<MockFileWatcherBackend>>());
   
   auto* test_backend = static_cast<NiceMock<MockFileWatcherBackend>*>(test_watcher->get_backend());
@@ -490,7 +516,7 @@ TEST_F(FileWatcherServiceTest, HandlesNonExistentWatchDirectory) {
   bad_config.drop_root = nonexistent_dir;
   
   auto bad_watcher = std::make_unique<TestableFileWatcherService>(
-      bad_config, *task_queue_repo_, *metadata_store_,
+      bad_config, *mock_file_processing_service_, *task_queue_repo_, *metadata_store_,
       std::make_unique<NiceMock<MockFileWatcherBackend>>());
   
   // Should not crash

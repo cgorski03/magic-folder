@@ -86,7 +86,7 @@ int main() {
       }
       
       file_watcher = std::make_unique<magic_core::async::FileWatcherService>(
-          watch_config, *task_queue_repo, *metadata_store);
+          watch_config, *file_processing_service, *task_queue_repo, *metadata_store);
     }
     std::string host = server_url.substr(0, server_url.find(':'));
     int port = std::stoi(server_url.substr(server_url.find(':') + 1));

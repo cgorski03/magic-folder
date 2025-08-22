@@ -86,6 +86,7 @@ public:
 
   FileWatcherService(const WatchConfig& cfg,
                      FileProcessingService& file_processing_service,
+                     TaskQueueRepo& task_queue_repo,
                      MetadataStore& metadata);
 
   // Non-copyable
@@ -152,7 +153,8 @@ private:
 private:
   // Config and dependencies
   const WatchConfig cfg_;
-  TaskQueueRepo& tasks_;
+  FileProcessingService& file_processing_service_;
+  TaskQueueRepo& task_queue_repo_;  // Still needed for reindexing workflow
   MetadataStore& metadata_;
 
 

@@ -1,4 +1,5 @@
 #include "magic_core/async/file_watcher_service.hpp"
+#include "magic_core/services/file_processing_service.hpp"
 
 #include <iostream>
 
@@ -14,9 +15,10 @@ std::unique_ptr<IFileWatcherBackend> make_mac_fsevents_backend(
 // ---------- FileWatcherService public ----------
 
 FileWatcherService::FileWatcherService(const WatchConfig& cfg,
-                                       TaskQueueRepo& tasks,
+                                       FileProcessingService& file_processing_service,
+                                       TaskQueueRepo& task_queue_repo,
                                        MetadataStore& metadata)
-    : cfg_(cfg), tasks_(tasks), metadata_(metadata) {
+    : cfg_(cfg), file_processing_service_(file_processing_service), task_queue_repo_(task_queue_repo), metadata_(metadata) {
 #if defined(__APPLE__)
   backend_ = make_mac_fsevents_backend(
       cfg_.drop_root,
@@ -360,18 +362,22 @@ void FileWatcherService::handle_overflow() {
 
 void FileWatcherService::enqueue_process_file(const std::filesystem::path& p) {
   try {
-    std::cout << "[FileWatcher] Enqueueing PROCESS_FILE task for: " << p.string() << std::endl;
-    tasks_.enqueue_process_file(p.string(), /*priority=*/10);
-    std::cout << "[FileWatcher] Successfully enqueued PROCESS_FILE task for: " << p.string() << std::endl;
+    std::cout << "[FileWatcher] Requesting processing for file: " << p.string() << std::endl;
+    auto task_id = file_processing_service_.request_processing(p);
+    if (task_id.has_value()) {
+      std::cout << "[FileWatcher] Successfully requested processing for: " << p.string() 
+                << " (task_id: " << *task_id << ")" << std::endl;
+    } else {
+      std::cout << "[FileWatcher] File processing not needed (already processed or failed): " << p.string() << std::endl;
+    }
   } catch (const std::exception& e) {
-    // Likely duplicate due to idempotent unique constraint; safe to ignore
-    std::cerr << "[FileWatcher] enqueue_process_file error: " << e.what() << std::endl;
+    std::cerr << "[FileWatcher] Error requesting file processing: " << e.what() << std::endl;
   }
 }
 
 void FileWatcherService::enqueue_reindex_file(const std::filesystem::path& p) {
   try {
-    tasks_.enqueue_reindex_file(p.string(), /*priority=*/8);
+    task_queue_repo_.enqueue_reindex_file(p.string(), /*priority=*/8);
   } catch (const std::exception& e) {
     std::cerr << "[Watcher] enqueue_reindex_file: " << e.what() << std::endl;
   }
