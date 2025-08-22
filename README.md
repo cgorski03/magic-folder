@@ -2,232 +2,350 @@
 
 An intelligent file management system leveraging locally-run LLMs and embedding models to organize and classify your files with an unyielding commitment to privacy and performance.
 
-## Project Status: MVP with Roadmap
+- Local-first: all processing stays on your machine
+- Encrypted at rest: SQLCipher-backed SQLite
+- Fast semantic search: FAISS summary + chunk indexes
+- Extensible: pluggable extractors, task-based background processing
+- Human-friendly organization: tags, virtual folders, symlinks
 
-**Current State**: Chunked file indexing (Markdown + Plaintext), zstd-compressed chunk storage, SQLCipher-encrypted SQLite, FAISS-backed two-stage search (files + chunks), background Worker + WorkerPool processing via task queue, REST API + CLI working against a live Ollama server
-**Next Phase**: File watching, worker health/metrics, background index maintenance, PDF extractor
+## Project Status
+
+- Current MVP
+  - Chunked file indexing (Markdown + Plaintext)
+  - Content hashing (single read: hash + chunk extraction)
+  - Embeddings via Ollama (mxbai-embed-large)
+  - SQLCipher-encrypted SQLite (macOS Keychain-backed key)
+  - zstd-compressed chunk content
+  - FAISS-backed two-stage search (files + chunks)
+  - Background Worker + WorkerPool processing via task queue
+  - REST API + CLI working against a local Ollama server
+  - Unit tests with mocks
+- Next Phase (in progress/planned)
+  - Tauri desktop UI (lightweight, cross-platform)
+  - File watching service (producer) + health metrics
+  - Additional workers/tasks (retroactive AI tagging, index maintenance, virtual views)
+  - PDF extractor and more content types
 
 ## Architecture Overview
 
-Magic Folder C++ is a C++ implementation that automatically processes files, generates embeddings using Ollama, and enables semantic search across your document collection. The system is designed with a layered architecture:
+Magic Folder C++ uses a layered, async design:
 
-### Core Components
+- `magic-core`: business logic, task system, extractors, database, vector search
+- `magic-api`: REST server + worker pool (consumers)
+- `magic-cli`: command-line tool for development and power users
+- Tauri UI (planned): Electron-like UX with native webview footprint
 
-- **`magic-core`**: Core business logic for file processing, vector storage, and embeddings
-- **`magic-api`**: REST API server with background worker pools
-- **`magic-cli`**: Command-line interface for system interaction
+### System Architecture
 
-### Current MVP Features 
+```mermaid
+graph TB
+    %% External Interfaces
+    CLI[magic_cli]
+    API[REST API :3030]
+    UI[Tauri UI<br/><i>planned</i>]
+    
+    %% File System
+    Files[File System<br/>Drop Folder]
+    Storage[Managed Storage<br/>UUID/Hash based]
+    
+    %% Core Services
+    Watcher[FileWatcherService<br/><i>planned</i>]
+    Queue[(TaskQueue<br/>SQLCipher DB)]
+    Pool[WorkerPool<br/>N Threads]
+    
+    %% Processing Pipeline
+    Extractor[Content Extractors<br/>MD, TXT, PDF]
+    Ollama[Ollama Server<br/>localhost:11434]
+    Search[Search Service<br/>FAISS Indexes]
+    
+    %% Data Stores
+    MetaDB[(Metadata Store<br/>SQLCipher)]
+    SummaryIdx[Summary Index<br/>File-level vectors]
+    ChunkIdx[Chunk Index<br/>Detailed vectors]
+    
+    %% User Interactions
+    CLI --> API
+    UI --> API
+    
+    %% File Ingestion Flow
+    Files --> Watcher
+    Watcher --> Queue
+    API --> Queue
+    
+    %% Task Processing Flow
+    Queue --> Pool
+    Pool --> Extractor
+    Extractor --> Ollama
+    Ollama --> MetaDB
+    Ollama --> SummaryIdx
+    Ollama --> ChunkIdx
+    
+    %% Storage Management
+    Pool --> Storage
+    Storage --> MetaDB
+    
+    %% Search Flow
+    API --> Search
+    Search --> SummaryIdx
+    Search --> ChunkIdx
+    Search --> MetaDB
+    
+    %% Styling
+    classDef external fill:#e1f5fe
+    classDef core fill:#f3e5f5
+    classDef storage fill:#e8f5e8
+    classDef processing fill:#fff3e0
+    
+    class CLI,API,UI external
+    class Watcher,Queue,Pool core
+    class MetaDB,SummaryIdx,ChunkIdx,Storage storage
+    class Extractor,Ollama,Search processing
+```
 
-- Chunked content extraction for Markdown and Plaintext
-- Content hashing for change detection (single read: hash + chunks)
-- Embedding generation via Ollama (`mxbai-embed-large`)
-- SQLCipher-encrypted SQLite metadata store (macOS keychain-backed key)
-- zstd compression of chunk content at rest
-- FAISS in-memory index for file-level search; on-demand FAISS for chunk search
-- Background processing pipeline: task queue + worker threads (`Worker`, `WorkerPool`)
-- REST API endpoints for processing and search (file-only and combined)
-- CLI for process/search/list
-- Comprehensive unit tests with mocks
+Key runtime components
 
-### Next Phase Features 
+- FileWatcherService (producer)
+  - Watches a single “Drop” inbox folder
+  - Debounces/stabilizes file events
+  - Enqueues ingest/processing tasks
+- TaskQueue (SQLite)
+  - Typed columns for common args (target_path, target_tag) + payload JSON for extras
+  - Status, priority, retries, timestamps
+- WorkerPool (consumers)
+  - N threads consume tasks and execute ITask commands
+  - Progress reporting via TaskProgress table (and optional SSE)
+- Vector indexes
+  - Summary index: file-level embeddings
+  - Chunk index: on-demand chunk vectors for precision scoring
+- Virtual view (symlink layer)
+  - By-tag folders, Inbox, All; symlinks/hardlinks to canonical stored files
+- Storage (managed library)
+  - Opaque, stable storage under UUID/hash with directory fan-out
 
-- **Advanced Chunking System**: Additional extractors (e.g., code-aware, PDFs)
-- **Worker Health + Metrics**: Monitoring, backoff, instrumentation
-- **Index Maintenance**: Background rebuild/compaction
-- **File Watching**: Real-time file system monitoring and auto-enqueue
+
+## Task System
+
+Command pattern with strong typing per task (ITask + concrete tasks). Typed columns in TaskQueue for common args, payload JSON for extras.
+
+Current/Planned task types
+
+- `PROCESS_FILE(target_path | file_id)`
+- `INGEST_FILE(target_path)` → move to storage, dedup, enqueue `PROCESS_FILE`
+- `RETROACTIVE_TAG(tag_id | target_tag, payload.keywords)`
+- `REBUILD_INDEX`
+- `REBUILD_VIRTUAL_VIEW`
+- `DELETE_FILE(target_path | file_id)`
+- `REINDEX_FILE(file_id)`
+- `ENSURE_ALIASES_FOR_FILE(file_id)`
+
+### Progress monitoring
+
+- `TaskProgress` table stores `progress_percent`, `status_message`, `updated_at`
+- `GET /v1/tasks/{id}` returns live status; optional SSE stream at `/v1/tasks/{id}/events`
+
+## API (MVP + Planned v1)
+
+### MVP (today)
+
+- `POST /process_file` - Queues a file for processing
+- `POST /search` - Magic search: returns top-k files and top-k chunks with snippets
+- `POST /files/search` - File-only search
+- `GET /files` - List indexed files
+- `GET /files/{path}` - Get file info (placeholder)
+- `DELETE /files/{path}` - Delete file (placeholder)
+
+### Operational Endpoints
+
+- `GET /` - Health check endpoint
+  ```json
+  {
+    "success": true,
+    "message": "Magic Folder API is running",
+    "version": "0.1.0",
+    "status": "healthy"
+  }
+  ```
+
+- `GET /tasks` - List all tasks (optional `?status=PENDING|PROCESSING|COMPLETED|FAILED`)
+  ```json
+  {
+    "success": true,
+    "message": "Tasks retrieved successfully",
+    "data": {
+      "tasks": [
+        {
+          "id": 123,
+          "task_type": "PROCESS_FILE",
+          "status": "PROCESSING",
+          "priority": 10,
+          "target_path": "/path/to/file.txt",
+          "created_at": "2024-01-15T10:30:00Z",
+          "updated_at": "2024-01-15T10:31:00Z"
+        }
+      ],
+      "count": 1
+    }
+  }
+  ```
+
+- `GET /tasks/{id}/status` - Get detailed task status
+- `GET /tasks/{id}/progress` - Get task progress with percentage and status message
+  ```json
+  {
+    "success": true,
+    "message": "Task progress retrieved successfully",
+    "data": {
+      "task_id": 123,
+      "progress_percent": 0.75,
+      "status_message": "Processing chunk 1800 of 2400",
+      "updated_at": "2024-01-15T10:31:30Z"
+    }
+  }
+  ```
+
+- `POST /tasks/clear` - Clear completed/failed tasks (optional `{"older_than_days": 7}`)
+
+### Planned v1 (stable)
+
+- **Files**
+  - `POST /v1/files/import { source_path, process }` → `201 Created` (Location: `/v1/files/{id}`)
+  - `GET /v1/files`, `GET /v1/files/{id}`, `DELETE /v1/files/{id}` → `202` with task
+  - `POST /v1/files/{id}/process` → `202 Accepted` (Operation-Location: `/v1/tasks/{id}`)
+  - `GET /v1/files/{id}/chunks` (debug)
+- **Search**
+  - `POST /v1/search { query, top_k_files, top_k_chunks, filters }`
+- **Tasks**
+  - `POST /v1/tasks { type, target_path/target_tag, payload }` → `201`
+  - `GET /v1/tasks`, `GET /v1/tasks/{id}`, `GET /v1/tasks/{id}/events`
+  - `PATCH /v1/tasks/{id} { cancel | reprioritize }`
+- **Tags**
+  - `POST /v1/tags { name, keywords? }` → `201`; returns initial candidates + `task_id`
+  - `GET /v1/tags`, `GET /v1/tags/{name}`, `GET /v1/tags/{name}/files`
+  - `POST /v1/files/{id}/tags { name }`, `DELETE /v1/files/{id}/tags/{name}`
+  - `POST /v1/tags/{name}/ai-apply { keywords? }` → `202` task
+- **Virtual view**
+  - `GET /v1/virtual/root`
+  - `POST /v1/virtual/rebuild` → `202`
+  - `POST /v1/virtual/ensure-file/{id}`
+- **Admin**
+  - `GET /v1/health`, `GET /v1/info`
+  - `GET /v1/admin/workers`, `POST /v1/admin/workers/pause|resume`
+  - `GET /v1/admin/index`, `POST /v1/admin/index/rebuild`
+
+### HTTP semantics
+
+- Synchronous reads → `200 OK`
+- Create task resource → `201 Created` (Location header)
+- Long-running operations on existing resources → `202 Accepted` (Operation-Location)
+- Optional `wait=seconds` to block briefly and return final result if it completes fast
 
 ## Development Roadmap
 
-### Phase 1: Chunking System Overhaul (Priority 1)
+### Phase 1: Chunking + Storage (MVP complete)
 
-#### 1.1 Content Extractor Refactoring
-- [x] **Create `Chunk.h` structure**
-  - [x] Define `Chunk` struct with content, metadata, and vector fields
-  - [x] Add chunk indexing and ordering logic
-  - [x] Implement chunk-level content hashing
+- Markdown + plaintext extractors (semantic chunking)
+- Chunk/content hashing (single pass)
+- zstd compression for chunk content
+- SQLCipher SQLite (macOS Keychain key)
+- Two-stage search (file → chunk) with FAISS
+- Task queue + Worker/WorkerPool
+- CLI + REST MVP
 
-- [x] **Implement `ContentExtractorFactory`**
-  - [x] Create factory pattern for file type detection
-  - [x] Add support for multiple extractor types
-  - [x] Implement fallback to `PlainTextExtractor`
+### Phase 2: Async + Watcher + Health (Priority)
 
-- [x] **Build `MarkdownExtractor`**
-  - [x] Parse markdown structure (headers, sections, lists)
-  - [x] Create semantic chunk boundaries
-  - [x] Preserve markdown formatting in chunks
-  - [x] Add metadata extraction (title, headings, links)
+- **File watching (producer)**
+  - Debounce/stability detection; idempotent enqueues
+  - Ignore patterns; initial rescan on startup
+- **Worker health/metrics**
+  - Queue depth, throughput, task age, heartbeats
+  - Backoff/retry policies and dead-letter handling
+- **Index maintenance**
+  - Incremental FAISS updates, background rebuild/compaction
+- **Task progress UX**
+  - `TaskProgress` table, SSE endpoint; CLI and UI status views
 
-- [x] **Enhance `PlainTextExtractor`**
-  - [x] Implement paragraph-based chunking
-  - [x] Add sentence boundary detection
-  - [x] Handle special characters and encoding
-  - [x] Add content cleaning and normalization
+### Phase 3: Content & Tagging
 
-#### 1.2 Database Schema Updates
-- [x] **Update `Files` table**
-  - [x] Add `summary_vector_blob` for file-level embeddings
-  - [x] Add `processing_status` field
-  - [x] Add `suggested_category` and `suggested_filename` fields
-  - [x] Add `tags` JSON field
+- **PDF extractor** (text + metadata)
+- **Code-aware extractor** (function/class boundaries)
+- **Retroactive AI tagging**
+  - Tag vector creation (keywords, LLM expansion, seed centroid)
+  - Coarse (summary index) → fine (chunk scoring) → apply/suggest
+  - “Create Tag Folder” that populates live; symlink aliases for auto-applied
+- **Virtual views**
+  - `by-tag/`, `Inbox/`, `All/`, `by-date/` (optional)
 
-- [x] **Create `Chunks` table**
-  - [x] Implement chunk storage with file relationships
-  - [x] Add chunk indexing and ordering
-  - [x] Store chunk-level vectors
-  - [x] Add content hashing for chunks
+### Phase 4: Tauri UI
 
-- [x] **Create `TaskQueue` table**
-  - [x] Implement task status tracking
-  - [x] Add priority and error handling
-  - [x] Support task retry logic
-#### 1.25 Data Storage Optimization
-- [x] **Encode `content` blob**
-  - [x] Setup zstd library integration
-  - [x] Implement encoding in the content blob field for the chunks
+- **Desktop UI** (Tauri)
+  - Inbox review, tagging, search, “Create Tag Folder”
+  - Task monitor with live progress (SSE)
+  - Settings (watch paths, thresholds, link mode, worker count)
+- **API-first**: UI uses REST; backend remains independent
 
-- [x] **Encrypt Data at rest**
-  - [x] Implement OS-backed key management (macOS Keychain)
-  - [x] Migrate database to `sqlite-modern-cpp`
-  - [x] Migrate database to SQLCipher
+### Phase 5: Enterprise & Ops
 
-#### 1.3 Search System Enhancement
-- [x] **Two-Stage Search Implementation**
-  - [x] Stage 1: File-level similarity search
-  - [x] Stage 2: Chunk-level precision search
-  - [x] Implement result ranking and scoring
-  - [x] Add search result highlighting
-
-- [x] **Memory Index Management**
-  - [x] Load summary vectors at startup
-  - [x] Implement chunk index loading
-  - [x] Add index rebuilding capabilities
-  - [x] Optimize memory usage
-
-### Phase 2: Worker Pool Architecture (Priority 2)
-
-#### 2.1 Async Infrastructure
-- [x] **Create `Worker.h` interface**
-  - [x] Define worker thread lifecycle
-  - [x] Add task processing interface
-  - [x] Implement error handling and recovery
-  - [ ] Add worker health monitoring
-
-- [x] **Implement `WorkerPool.h`**
-  - [x] Thread pool management
-  - [x] Graceful shutdown coordination
-  - [x] Configurable worker count (via `magicrc.json`)
-
-- [x] **Database Integration**
-  - [x] Create `DatabaseManager.h` for connection pooling
-  - [x] Implement `TaskQueue.h` for job management
-  - [x] Add transaction handling
-  - [ ] Implement connection retry logic
-
-#### 2.2 Background Processing
-- [x] **Task Processing Pipeline**
-  - [x] Implement task polling mechanism
-  - [x] Add task status updates
-  - [x] Create error handling and retry logic
-  - [ ] Add progress tracking
-
-- [ ] **File System Integration**
-  - [ ] Implement file watching capabilities
-  - [ ] Add file change detection
-  - [ ] Create automatic task creation
-  - [ ] Add file move/rename handling
-
-### Phase 3: Enhanced Features (Priority 3)
-
-#### 3.1 Advanced Content Processing
-- [ ] **PDF Support**
-  - [ ] Integrate PDF text extraction library
-  - [ ] Handle PDF structure and formatting
-  - [ ] Add PDF metadata extraction
-  - [ ] Implement PDF chunking strategies
-
-- [ ] **Code File Enhancement**
-  - [ ] Add syntax-aware chunking
-  - [ ] Implement function/class boundary detection
-  - [ ] Add code comment extraction
-  - [ ] Create code-specific search features
-
-#### 3.2 Search and UI Improvements
-- [ ] **Advanced Search Features**
-  - [ ] Add search filters (file type, date, size)
-  - [ ] Implement search result pagination
-  - [ ] Add search history and suggestions
-  - [ ] Create search result export
-
-- [ ] **Performance Optimizations**
-  - [ ] Implement vector caching
-  - [ ] Add search result caching
-  - [ ] Optimize database queries
-  - [ ] Add background index maintenance
+- Docker, CI/CD
+- Cross-platform secret storage for DB key
+- Multi-user, authZ, audit
+- Backup & restore
+- Cluster deployment
 
 ## 🛠️ Installation & Setup
 
-### Prerequisites
+### Prerequisites (backend)
 
-1. **C++20 Compatible Compiler**: GCC 10+, Clang 12+, or MSVC 2019+
-2. **CMake**: Version 3.20 or higher
-3. **Ollama**: Local Ollama server with embedding model
+1.  **C++20 Compatible Compiler**: GCC 10+, Clang 12+, or MSVC 2019+
+2.  **CMake**: Version 3.20 or higher
+3.  **Ollama**: Local Ollama server with embedding model
+
+### Install Ollama
 
 ```bash
-# Install Ollama
 curl -fsSL https://ollama.ai/install.sh | sh
-
-# Pull the required embedding model
 ollama pull mxbai-embed-large
-
-# Start Ollama server
 ollama serve
 ```
 
-4. **Dependencies**:
-   - curl (HTTP client)
-   - nlohmann-json (JSON parsing)
-   - sqlite (builds against SQLCipher)
-   - SQLCipher (encrypted SQLite)
-   - FAISS (vector similarity search)
-   - zstd (chunk compression)
-   - crow (HTTP server)
-
-### Installation
+### Install packages
 
 #### Ubuntu/Debian
+
 ```bash
 sudo apt update
-sudo apt install -y build-essential cmake libcurl4-openssl-dev nlohmann-json3-dev libsqlcipher-dev libfaiss-dev libzstd-dev
+sudo apt install -y build-essential cmake libcurl4-openssl-dev \
+  nlohmann-json3-dev libsqlcipher-dev libfaiss-dev libzstd-dev
 ```
 
 #### macOS
-```bash
-# Using Homebrew
-brew install cmake curl nlohmann-json sqlcipher faiss zstd
 
-# Optional: vcpkg for C++ dependencies
-# https://learn.microsoft.com/vcpkg/get_started/get-started
+```bash
+brew install cmake curl nlohmann-json sqlcipher faiss zstd
 ```
 
-#### Windows
+#### Windows (vcpkg)
+
 ```bash
-# Using vcpkg
 vcpkg install curl nlohmann-json sqlite3 faiss zstd crow
 ```
 
-### Building
+### Build (backend)
 
 ```bash
-# From repo root
 mkdir build && cd build
 cmake ..
 cmake --build . -j
 ```
 
+### Optional: Tauri UI (planned)
+
+- Requires Rust toolchain + Node.js (LTS)
+- UI runs as separate process, talks to `http://localhost:3030/v1`
+- Repo/UI coming in Phase 4
+
 ## ⚙️ Configuration
 
-Create a `magicrc.json` in the project root (read at server startup):
+Create `magicrc.json` in project root:
 
 ```json
 {
@@ -235,158 +353,177 @@ Create a `magicrc.json` in the project root (read at server startup):
   "metadata_db_path": "./data/metadata.db",
   "ollama_url": "http://localhost:11434",
   "embedding_model": "mxbai-embed-large",
-  "num_workers": 4
+  "num_workers": 4,
+
+  "watch": {
+    "enabled": false,
+    "inbox_root": "./MagicFolder/Drop",
+    "recursive": true,
+    "settle_ms": 1500,
+    "ignore": ["*.tmp", ".DS_Store", "*.part", "*.crdownload", "~*"]
+  },
+
+  "storage": {
+    "root": "./MagicFolder/Storage",
+    "fanout_segments": 2,
+    "fanout_chars_per_segment": 2,
+    "id_mode": "uuid", // or "sha256"
+    "link_mode": "auto" // symlink | hardlink | shortcut | copy | auto
+  },
+
+  "virtual_view": {
+    "root": "./MagicFolder/View",
+    "create_inbox_alias": true,
+    "create_all_alias": true
+  },
+
+  "tagging": {
+    "auto_apply_threshold": 0.85,
+    "suggest_threshold": 0.60
+  }
 }
 ```
 
-Notes:
-- The server uses SQLCipher with a key fetched from the OS keychain (macOS only). On non-macOS platforms the server will currently throw when requesting the key.
-- The CLI reads `API_BASE_URL` from the environment (default: `http://127.0.0.1:3030`).
+Notes
+
+- On macOS, SQLCipher key is fetched from Keychain. On non-macOS the server
+  currently throws when requesting the key (planned cross-platform secret
+  storage).
+- Windows symlink behavior requires Developer Mode or admin; hardlink is
+  preferred when on the same volume.
 
 ## Usage
 
-### 1. Start the API Server
+### Start API server
 
 ```bash
-# From the build directory
 ./bin/magic_api
 ```
 
-The server starts on `http://localhost:3030` (or your configured host:port) and launches a `WorkerPool` of `num_workers` threads to process tasks from the queue.
+### CLI examples
 
-### 2. Use the CLI
-
-Environment (optional):
 ```bash
 export API_BASE_URL=http://127.0.0.1:3030
+
+# Process a file immediately
+./bin/magic_cli process --file /path/to/file.txt
+
+# Magic search (files + chunks)
+./bin/magic_cli search --query "your query" --top-k 5
+
+# File-only search
+./bin/magic_cli filesearch --query "your query" --top-k 5
+
+# List files
+./bin/magic_cli list
 ```
 
-Commands:
-- Process a file:
-  ```bash
-  ./bin/magic_cli process --file /path/to/file.txt
-  ```
-- Magic search (files + chunks):
-  ```bash
-  ./bin/magic_cli search --query "your query" --top-k 5
-  ```
-- File-only search:
-  ```bash
-  ./bin/magic_cli filesearch --query "your query" --top-k 5
-  ```
-- List all files:
-  ```bash
-  ./bin/magic_cli list
-  ```
+### Task Management & Progress Monitoring
 
-### 3. API Endpoints
-
-- `GET /` - Health check
-- `POST /process_file` - Queue a file for processing
-- `POST /search` - Magic search: returns top-k files and top-k chunks (with decompressed content)
-- `POST /files/search` - File-only search
-- `GET /files` - List all indexed files
-- `GET /files/{path}` - Get file info (placeholder response for now)
-- `DELETE /files/{path}` - Delete file (placeholder)
-
-## 📁 Project Structure
-
-```
-magic-folder/
-├── README.md
-├── CMakeLists.txt
-├── vcpkg.json
-├── build.sh
-├── run_tests.sh
-├── magicrc.json                 # JSON config (server)
-├── data/                        # Runtime data (gitignored)
-│   └── metadata.db
-├── include/
-│   ├── magic_api/
-│   │   ├── config.hpp
-│   │   ├── routes.hpp
-│   │   └── server.hpp
-│   ├── magic_cli/
-│   │   └── cli_handler.hpp
-│   └── magic_core/
-│       ├── async/               # Worker + pool
-│       ├── db/                  # SQLCipher + schema + repos
-│       ├── extractors/          # Markdown, Plaintext, Factory
-│       ├── llm/                 # Ollama client
-│       ├── services/            # File/Search/Info/Delete
-│       └── types/               # Chunk, File
-├── src/
-│   ├── magic_api/               # main.cpp, routes.cpp, server.cpp
-│   ├── magic_cli/               # main.cpp, cli_handler.cpp
-│   └── magic_core/              # implementations for include/
-└── tests/
-    ├── unit/
-    ├── common/
-    └── test_main.cpp
-```
-
-## 🧪 Testing
-
-See detailed instructions in TESTING.md. Run the test suite:
+Here's a complete end-to-end workflow showing how to queue a task and monitor its progress:
 
 ```bash
-# From repo root
-export VCPKG_ROOT=/path/to/vcpkg  # required by run_tests.sh
+# 1. Queue a file for processing (returns immediately)
+./bin/magic_cli process --file /path/to/large-document.pdf
+# Output: File processing queued successfully
+
+# 2. List all tasks to see what's in the queue
+./bin/magic_cli tasks
+# Output:
+# === Task List ===
+# Task ID: 123 | Type: PROCESS_FILE | Status: PENDING
+# Target: /path/to/large-document.pdf
+# Created: 2024-01-15 10:30:00 | Updated: 2024-01-15 10:30:00
+
+# 3. Check specific task status
+./bin/magic_cli task-status --id 123
+# Output:
+# === Task Status ===
+# Task ID: 123
+# Type: PROCESS_FILE
+# Status: PROCESSING
+# Target: /path/to/large-document.pdf
+# Created: 2024-01-15 10:30:00
+# Updated: 2024-01-15 10:31:15
+
+# 4. Monitor task progress with live updates
+./bin/magic_cli task-progress --id 123
+# Output:
+# === Task Progress ===
+# Task ID: 123
+# Progress: 75.0%
+# Progress: [==============================>         ] 75.0%
+# Status: Processing chunk 1800 of 2400
+# Updated: 2024-01-15 10:31:30
+
+# 5. Filter tasks by status
+./bin/magic_cli tasks --status COMPLETED
+./bin/magic_cli tasks --status FAILED
+
+# 6. Clean up old completed tasks
+./bin/magic_cli clear-tasks --days 30
+```
+
+**Typical Task Lifecycle:**
+1. **PENDING** → Task queued, waiting for worker
+2. **PROCESSING** → Worker actively processing (chunking, embedding, indexing)
+3. **COMPLETED** → Successfully finished, file is searchable
+4. **FAILED** → Error occurred, check task status for error message
+
+### Planned UI (Tauri)
+
+- Launch Tauri desktop app to review Inbox, monitor tasks, run searches, create
+  tag folders, and manage settings.
+
+## Testing
+
+See TESTING.md. Run test suite:
+
+```bash
 ./run_tests.sh
 ```
+## Security & Privacy
 
-## 🤝 Contributing
+### Encryption & Data Protection
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
+**Database Encryption (SQLCipher):**
+- **Algorithm**: AES-256 in CBC mode with HMAC-SHA256 authentication
+- **Backend**: OpenSSL cryptographic primitives (`SQLCIPHER_CRYPTO_OPENSSL`)
+- **Key Derivation**: PBKDF2 with SHA256 (default 256,000 iterations)
+- **Page Size**: 4096 bytes (SQLCipher default)
+- **WAL Mode**: Write-Ahead Logging enabled for performance with encryption
 
-## 📄 License
+**Key Management:**
+- **macOS**: Keys stored in macOS Keychain (`Security.framework`)
+  - Service: `com.magicfolder.database_key`
+  - Account: `default_user`
+  - 256-bit keys generated using `SecRandomCopyBytes`
+- **Cross-platform**: Planned support for Windows Credential Store and Linux Secret Service API
 
-This project is licensed under the MIT License
+**Content Protection:**
+- **Chunk Compression**: zstd compression before database storage
+- **Vector Storage**: Embeddings stored as encrypted BLOBs in SQLCipher database
+- **File Content**: Original files remain in place; only metadata and chunks stored encrypted
 
-## 🔮 Future Enhancements
+### Threat Model
 
-### Phase 4: Advanced Features
-- [ ] Docker containerization
-- [ ] CI/CD pipeline
-- [ ] Performance monitoring
-- [ ] Advanced analytics
-- [ ] Plugin system for custom extractors
+**Protected Against:**
+- **Disk Access Attacks**: Full database encryption protects against offline disk analysis
+- **Memory Dumps**: Database keys cleared from memory after connection setup
+- **Data Exfiltration**: No network calls except to local Ollama server (configurable endpoint)
+- **Unauthorized Access**: OS-level keystore integration prevents key extraction without user authentication
 
-### Phase 5: Enterprise Features
-- [ ] Multi-user support
-- [ ] Access control and permissions
-- [ ] Audit logging
-- [ ] Backup and restore
-- [ ] Cluster deployment
+**Assumptions & Limitations:**
+- **Runtime Security**: Assumes the running process and OS are trusted (no protection against malware with admin/root access)
+- **Local Ollama Server**: Communication with Ollama server is over HTTP (localhost only by default)
+- **File System**: Original files are not encrypted by Magic Folder (use full-disk encryption like FileVault/BitLocker)
+- **Network Boundaries**: API server binds to localhost by default; firewall configuration is user's responsibility
 
-## 🐛 Troubleshooting
+**Privacy Guarantees:**
+- **Local-First**: All processing runs locally; no data sent to external services
+- **No Telemetry**: No analytics, crash reporting, or usage statistics collected by default
+- **Offline Capable**: Works completely offline once Ollama models are downloaded
 
-### Common Issues
+📄 License
 
-1. **Ollama not running**: Start with `ollama serve`
-2. **Missing FAISS/SQLCipher**: Install dev packages (see prerequisites)
-3. **Build errors**: Ensure C++20 compiler and CMake 3.20+
-4. **Permission errors**: Check write permissions for `data/`
-5. **Port conflicts**: Change `api_base_url` in `magicrc.json`
-6. **Non-macOS server startup**: Server requires macOS Keychain for DB key; non-macOS not yet supported for server runtime
-
-### Debug Mode
-
-Enable debug logging by setting environment variables:
-```bash
-export MAGIC_FOLDER_DEBUG=1
-export MAGIC_FOLDER_LOG_LEVEL=DEBUG
-```
-
-## 📊 Performance Notes
-
-- **Current**: Single-threaded processing, ~1-2 files/second
-- **Target (Phase 2)**: Multi-threaded with worker pools, ~10-20 files/second
-- **Memory Usage**: ~100MB base + ~1MB per 1000 files
-- **Storage**: ~1KB per file metadata + ~4KB per chunk vector
-
----
+MIT License
