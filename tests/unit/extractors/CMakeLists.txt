@@ -7,6 +7,7 @@ set(EXTRACTORS_TEST_SOURCES
     markdown_extractor_test.cpp
     plaintext_extractor_test.cpp
     content_extractor_factory_test.cpp
+    pdf_extractor_mac_test.cpp
 )
 
 # Create extractors test library
@@ -64,5 +65,12 @@ add_custom_target(test_content_extractor_factory
     COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="ContentExtractorFactoryTest.*"
     DEPENDS magic_folder_tests
     COMMENT "Running ContentExtractorFactory tests only"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+add_custom_target(test_pdf_extractor_mac
+    COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="PdfExtractorMacTest.*"
+    DEPENDS magic_folder_tests
+    COMMENT "Running PDF Extractor Mac tests only"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 ) 

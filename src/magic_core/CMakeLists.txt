@@ -15,9 +15,13 @@ file(GLOB_RECURSE ASYNC_SOURCES "async/*.cpp")
 # Handle macOS-specific Objective-C++ files
 if(APPLE)
     file(GLOB_RECURSE ASYNC_MM_SOURCES "async/*.mm")
+    file(GLOB_RECURSE EXTRACTORS_MM_SOURCES "extractors/*.mm")
     list(APPEND ASYNC_SOURCES ${ASYNC_MM_SOURCES})
+    list(APPEND EXTRACTORS_SOURCES ${EXTRACTORS_MM_SOURCES})
     # Enable Objective-C++ language
     enable_language(OBJCXX)
+    # Set minimum macOS deployment target for std::filesystem support
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS deployment version")
 endif()
 
 # Combine all sources
@@ -53,6 +57,9 @@ find_package(zstd CONFIG REQUIRED)
 # Create the library
 add_library(magic_core STATIC ${MAGIC_CORE_SOURCES})
 
+set_property(TARGET magic_core PROPERTY OBJCXX_STANDARD 20)
+set_property(TARGET magic_core PROPERTY OBJCXX_STANDARD_REQUIRED ON)
+set_property(TARGET magic_core PROPERTY OBJCXX_EXTENSIONS OFF)
 # Link libraries
 target_link_libraries(magic_core
     PUBLIC
@@ -83,6 +90,14 @@ target_compile_definitions(magic_core PRIVATE
     SQLCIPHER_CRYPTO_OPENSSL
 )
 
+# macOS-specific compile definitions for filesystem support
+if(APPLE)
+    target_compile_definitions(magic_core PRIVATE
+        _LIBCPP_DISABLE_AVAILABILITY=1
+        __MAC_OS_X_VERSION_MIN_REQUIRED=101500
+    )
+endif()
+
 # Compiler flags
 target_compile_features(magic_core PUBLIC cxx_std_20)
 
@@ -90,10 +105,12 @@ target_compile_features(magic_core PUBLIC cxx_std_20)
 if(UNIX AND NOT APPLE)
     target_link_libraries(magic_core PRIVATE inotify)
 elseif(APPLE)
-    # macOS specific libraries if needed
+    # macOS specific libraries - add PDFKit and Foundation frameworks
     target_link_libraries(magic_core PRIVATE
         "-framework CoreFoundation"
         "-framework CoreServices"
+        "-framework Foundation"
+        "-framework PDFKit"
     )
 elseif(WIN32)
     # Windows specific libraries if needed

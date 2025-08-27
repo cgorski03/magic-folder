@@ -1,24 +1,28 @@
 #include "magic_core/extractors/content_extractor_factory.hpp"
-#include "magic_core/extractors/markdown_extractor.hpp"
-#include "magic_core/extractors/plaintext_extractor.hpp"
-#include "magic_core/extractors/content_extractor.hpp"
 
 #include <stdexcept>
 
+#include "magic_core/extractors/content_extractor.hpp"
+#include "magic_core/extractors/markdown_extractor.hpp"
+#include "magic_core/extractors/pdf_extractor_mac.hpp"
+#include "magic_core/extractors/plaintext_extractor.hpp"
+
 namespace magic_core {
 ContentExtractorFactory::ContentExtractorFactory() {
-    extractors.push_back(std::make_unique<MarkdownExtractor>());
-    extractors.push_back(std::make_unique<PlainTextExtractor>());
+  extractors.push_back(std::make_unique<MarkdownExtractor>());
+  extractors.push_back(std::make_unique<PlainTextExtractor>());
+#if defined(__APPLE__)
+  extractors.push_back(std::make_unique<MacPdfExtractor>());
+#endif
 }
 
 const ContentExtractor& ContentExtractorFactory::get_extractor_for(
     const std::filesystem::path& file_path) const {
-    for (const auto& extractor : extractors) {
-        if (extractor->can_handle(file_path)) {
-            return *extractor;
-        }
+  for (const auto& extractor : extractors) {
+    if (extractor->can_handle(file_path)) {
+      return *extractor;
     }
-    throw std::runtime_error("No suitable content extractor found for " +
-                             file_path.string());
+  }
+  throw std::runtime_error("No suitable content extractor found for " + file_path.string());
 }
-}
+}  // namespace magic_core

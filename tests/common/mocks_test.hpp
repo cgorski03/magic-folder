@@ -37,7 +37,7 @@ class MockContentExtractor : public magic_core::ContentExtractor {
   MockContentExtractor() = default;
 
   MOCK_METHOD(bool, can_handle, (const std::filesystem::path& file_path), (const, override));
-  MOCK_METHOD(std::vector<Chunk>, get_chunks, (const std::filesystem::path& file_path), (const, override));
+  MOCK_METHOD(std::vector<magic_core::Chunk>, get_chunks, (const std::filesystem::path& file_path), (const, override));
   MOCK_METHOD(magic_core::ExtractionResult, extract_with_hash, (const std::filesystem::path& file_path), (const, override));
   MOCK_METHOD(magic_core::FileType, get_file_type, (), (const, override));
   // Note: get_content_hash is not virtual in the base class, so we can't mock it directly
@@ -78,20 +78,20 @@ inline std::vector<float> create_test_embedding_with_values(const std::vector<fl
 }
 
 // Create a test Chunk object
-inline Chunk create_test_chunk(
+inline magic_core::Chunk create_test_chunk(
     const std::string& content = "This is test chunk content for processing.",
     int chunk_index = 0) {
-  Chunk chunk;
+  magic_core::Chunk chunk;
   chunk.content = content;
   chunk.chunk_index = chunk_index;
   return chunk;
 }
 
 // Create multiple test chunks
-inline std::vector<Chunk> create_test_chunks(
+inline std::vector<magic_core::Chunk> create_test_chunks(
     int count = 3,
     const std::string& base_content = "Test chunk content") {
-  std::vector<Chunk> chunks;
+  std::vector<magic_core::Chunk> chunks;
   chunks.reserve(count);
   
   for (int i = 0; i < count; ++i) {
@@ -103,11 +103,11 @@ inline std::vector<Chunk> create_test_chunks(
 }
 
 // Create a test Chunk with embedding
-inline Chunk create_test_chunk_with_embedding(
+inline magic_core::Chunk create_test_chunk_with_embedding(
     const std::string& content = "This is test chunk content.",
     int chunk_index = 0,
     float embedding_base_value = 0.1f) {
-  Chunk chunk;
+  magic_core::Chunk chunk;
   chunk.content = content;
   chunk.chunk_index = chunk_index;
   chunk.vector_embedding = create_test_embedding(embedding_base_value);
@@ -115,10 +115,10 @@ inline Chunk create_test_chunk_with_embedding(
 }
 
 // Create multiple test chunks with embeddings
-inline std::vector<Chunk> create_test_chunks_with_embeddings(
+inline std::vector<magic_core::Chunk> create_test_chunks_with_embeddings(
     int count = 3,
     const std::string& base_content = "Test chunk content") {
-  std::vector<Chunk> chunks;
+  std::vector<magic_core::Chunk> chunks;
   chunks.reserve(count);
   
   for (int i = 0; i < count; ++i) {

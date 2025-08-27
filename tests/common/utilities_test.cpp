@@ -119,10 +119,10 @@ std::vector<float> TestUtilities::create_test_vector(const std::string& seed_tex
   return vector;
 }
 
-Chunk TestUtilities::create_test_chunk_with_embedding(
+magic_core::Chunk TestUtilities::create_test_chunk_with_embedding(
     const std::string& content, int chunk_index, const std::string& seed_text) {
   
-  Chunk chunk;
+  magic_core::Chunk chunk;
   chunk.content = content;
   chunk.chunk_index = chunk_index;
   chunk.vector_embedding = create_test_vector(seed_text + "_chunk_" + std::to_string(chunk_index), 1024);
@@ -130,10 +130,10 @@ Chunk TestUtilities::create_test_chunk_with_embedding(
   return chunk;
 }
 
-std::vector<Chunk> TestUtilities::create_test_chunks(
+std::vector<magic_core::Chunk> TestUtilities::create_test_chunks(
     int count, const std::string& base_content) {
   
-  std::vector<Chunk> chunks;
+  std::vector<magic_core::Chunk> chunks;
   chunks.reserve(count);
 
   for (int i = 0; i < count; ++i) {
@@ -156,7 +156,7 @@ void TestUtilities::populate_metadata_store_with_stubs(
 int TestUtilities::create_complete_file_in_store(
     std::shared_ptr<magic_core::MetadataStore> store,
     const magic_core::FileMetadata& metadata,
-    const std::vector<Chunk>& chunks) {
+    const std::vector<magic_core::Chunk>& chunks) {
   
   // First create the basic stub
   magic_core::BasicFileMetadata basic_metadata;

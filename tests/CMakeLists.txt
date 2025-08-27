@@ -28,6 +28,7 @@ set(ALL_TEST_SOURCES
     unit/extractors/markdown_extractor_test.cpp
     unit/extractors/plaintext_extractor_test.cpp
     unit/extractors/content_extractor_factory_test.cpp
+    unit/extractors/pdf_extractor_mac_test.cpp
     unit/db/metadata_store_test.cpp
     unit/db/file_info_service_test.cpp
     unit/db/file_delete_service_test.cpp
