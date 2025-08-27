@@ -59,6 +59,12 @@ void Routes::register_routes(Server &server) {
         return handle_delete_file(req, path);
       });
 
+  // Get file chunks endpoint
+  CROW_ROUTE(app, "/files/<string>/chunks")
+  ([this](const crow::request &req, const std::string &file_id) {
+    return handle_get_file_chunks(req, file_id);
+  });
+
   // Task management endpoints
   CROW_ROUTE(app, "/tasks")
   ([this](const crow::request &req) { return handle_list_tasks(req); });
@@ -183,6 +189,7 @@ crow::response Routes::handle_list_files(const crow::request &req) {
     nlohmann::json results = nlohmann::json::array();
     for (const auto &file : files) {
       nlohmann::json file_info;
+      file_info["id"] = file.id;
       file_info["path"] = file.path;
       file_info["size"] = file.file_size;
       file_info["type"] = file.file_type;
@@ -451,6 +458,46 @@ crow::response Routes::handle_clear_completed_tasks(const crow::request &req) {
     
   } catch (const std::exception &e) {
     std::cerr << "Exception in handle_clear_completed_tasks: " << e.what() << std::endl;
+    nlohmann::json error_response = create_error_response(e.what());
+    return create_json_response(error_response, 500);
+  }
+}
+
+crow::response Routes::handle_get_file_chunks(const crow::request &req, const std::string &file_id) {
+  try {
+    std::cout << "Getting chunks for file ID: " << file_id << std::endl;
+    
+    // Parse file_id as integer
+    int id;
+    try {
+      id = std::stoi(file_id);
+    } catch (const std::invalid_argument &e) {
+      nlohmann::json error_response = create_error_response("Invalid file ID format");
+      return create_json_response(error_response, 400);
+    }
+    
+    // Get chunks from file info service
+    std::vector<magic_core::ChunkInfo> chunks = file_info_service_->get_file_chunks(id);
+    
+    // Convert to JSON
+    nlohmann::json chunks_json = nlohmann::json::array();
+    for (const auto &chunk : chunks) {
+      nlohmann::json chunk_json;
+      chunk_json["id"] = chunk.id;
+      chunk_json["chunk_index"] = chunk.chunk_index;
+      chunk_json["content"] = chunk.content;
+      chunks_json.push_back(chunk_json);
+    }
+    
+    nlohmann::json response = create_success_response("File chunks retrieved successfully");
+    response["data"]["file_id"] = id;
+    response["data"]["chunks"] = chunks_json;
+    response["data"]["count"] = chunks_json.size();
+    
+    return create_json_response(response);
+    
+  } catch (const std::exception &e) {
+    std::cerr << "Exception in handle_get_file_chunks: " << e.what() << std::endl;
     nlohmann::json error_response = create_error_response(e.what());
     return create_json_response(error_response, 500);
   }

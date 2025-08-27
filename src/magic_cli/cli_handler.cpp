@@ -180,6 +180,23 @@ CliOptions CliHandler::parse_arguments(int argc, char* argv[]) {
                 options.older_than_days = std::stoi(value);
             }
         }
+    } else if (command == "chunks" || command == "c") {
+        options.command = Command::Chunks;
+        if (argc < 4) {
+            throw CliError("Chunks command requires a file ID. Usage: chunks --file-id <id>");
+        }
+        for (int i = 2; i < argc; i += 2) {
+            if (i + 1 >= argc) break;
+            std::string flag = argv[i];
+            std::string value = argv[i + 1];
+            
+            if (flag == "--file-id" || flag == "-f") {
+                options.file_id = value;
+            }
+        }
+        if (options.file_id.empty()) {
+            throw CliError("Chunks command requires a file ID. Usage: chunks --file-id <id>");
+        }
     } else if (command == "help" || command == "h" || command == "--help" || command == "-h") {
         options.command = Command::Help;
     } else {
@@ -211,6 +228,9 @@ void CliHandler::execute_command(const CliOptions& options) {
             break;
         case Command::Help:
             handle_help_command(options);
+            break;
+        case Command::Chunks:
+            handle_chunks_command(options);
             break;
         // Task management commands
         case Command::ListTasks:
@@ -280,7 +300,7 @@ void CliHandler::handle_list_command(const CliOptions& options) {
     
     try {
         nlohmann::json response = make_get_request("/files");
-        print_json_response(response);
+        print_file_list_response(response);
     } catch (const std::exception& e) {
         print_error("Failed to list files: " + std::string(e.what()));
     }
@@ -294,6 +314,18 @@ void CliHandler::handle_info_command(const CliOptions& options) {
 void CliHandler::handle_delete_command(const CliOptions& options) {
     // TODO: Implement file deletion command
     std::cout << "File deletion command not yet implemented" << std::endl;
+}
+
+void CliHandler::handle_chunks_command(const CliOptions& options) {
+    std::cout << "Getting chunks for file ID: " << options.file_id << std::endl;
+    
+    try {
+        std::string endpoint = "/files/" + options.file_id + "/chunks";
+        nlohmann::json response = make_get_request(endpoint);
+        print_chunks_response(response);
+    } catch (const std::exception& e) {
+        print_error("Failed to get file chunks: " + std::string(e.what()));
+    }
 }
 
 void CliHandler::handle_help_command(const CliOptions& options) {
@@ -486,6 +518,31 @@ void CliHandler::print_file_search_response(const nlohmann::json& response) {
     }
 }
 
+void CliHandler::print_file_list_response(const nlohmann::json& response) {
+    std::cout << "\n=== Indexed Files ===" << std::endl;
+    
+    if (response.is_array() && !response.empty()) {
+        std::cout << "Found " << response.size() << " file(s):\n" << std::endl;
+        
+        for (const auto& file : response) {
+            int id = file["id"].get<int>();
+            std::string path = file["path"].get<std::string>();
+            int size = file["size"].get<int>();
+            std::string type = file["type"].get<std::string>();
+            
+            std::cout << "  ID: " << id << std::endl;
+            std::cout << "  Path: " << path << std::endl;
+            std::cout << "  Size: " << size << " bytes" << std::endl;
+            std::cout << "  Type: " << type << std::endl;
+            std::cout << std::string(50, '-') << std::endl;
+        }
+        
+        std::cout << "\nTip: Use 'magic_cli chunks --file-id <ID>' to view chunks for a specific file." << std::endl;
+    } else {
+        std::cout << "No files found." << std::endl;
+    }
+}
+
 void CliHandler::print_error(const std::string& error) {
     std::cerr << "Error: " << error << std::endl;
 }
@@ -510,6 +567,9 @@ File Management Commands:
     --top-k, -k <num>    Number of results to return (default: 5)
 
   list, l       List all indexed files
+
+  chunks, c     Get all chunks for a specific file by ID
+    --file-id, -f <id>       File ID to get chunks for
 
 Task Management Commands:
   tasks, lt     List all tasks in the queue
@@ -537,6 +597,7 @@ Examples:
   magic_cli search --query "python code" --files-only
   magic_cli filesearch --query "documentation" --top-k 5
   magic_cli list
+  magic_cli chunks --file-id 123
 
   # Task management
   magic_cli tasks                           # List all tasks
@@ -752,6 +813,49 @@ void CliHandler::print_task_progress_response(const nlohmann::json& response) {
         
         std::cout << "Status: " << progress["status_message"].get<std::string>() << std::endl;
         std::cout << "Updated: " << progress["updated_at"].get<std::string>() << std::endl;
+        
+    } else if (response.contains("error")) {
+        std::cout << "Error: " << response["error"].get<std::string>() << std::endl;
+    } else {
+        std::cout << "Unexpected response format." << std::endl;
+    }
+}
+
+void CliHandler::print_chunks_response(const nlohmann::json& response) {
+    std::cout << "\n=== File Chunks ===" << std::endl;
+    
+    if (response.contains("success") && response["success"].get<bool>() == true &&
+        response.contains("data") && response["data"].contains("chunks")) {
+        
+        auto chunks = response["data"]["chunks"];
+        int count = response["data"]["count"].get<int>();
+        int file_id = response["data"]["file_id"].get<int>();
+        
+        std::cout << "File ID: " << file_id << std::endl;
+        std::cout << "Total chunks: " << count << std::endl;
+        
+        if (count == 0) {
+            std::cout << "No chunks found for this file." << std::endl;
+            return;
+        }
+        
+        std::cout << std::endl;
+        
+        for (const auto& chunk : chunks) {
+            int chunk_id = chunk["id"].get<int>();
+            int chunk_index = chunk["chunk_index"].get<int>();
+            std::string content = chunk["content"].get<std::string>();
+            
+            std::cout << std::string(80, '-') << std::endl;
+            std::cout << "Chunk #" << chunk_index << " (ID: " << chunk_id << ")" << std::endl;
+            std::cout << std::string(80, '-') << std::endl;
+            std::cout << content << std::endl;
+            std::cout << std::endl;
+        }
+        
+        std::cout << std::string(80, '=') << std::endl;
+        std::cout << "Total: " << count << " chunk(s) for file ID " << file_id << std::endl;
+        std::cout << std::string(80, '=') << std::endl;
         
     } else if (response.contains("error")) {
         std::cout << "Error: " << response["error"].get<std::string>() << std::endl;
