@@ -10,6 +10,34 @@
 #include "magic_core/db/task_queue_repo.hpp"
 
 namespace magic_api {
+
+// Simple helper to clean strings for JSON serialization
+std::string clean_string(const std::string& input) {
+  std::string result;
+  result.reserve(input.size());
+  
+  for (unsigned char c : input) {
+    if (c >= 32 && c < 127) {
+      // Printable ASCII
+      result += c;
+    } else if (c == '\n' || c == '\r' || c == '\t') {
+      // Keep common whitespace
+      result += c;
+    } else {
+      // Replace problematic characters with space
+      result += ' ';
+    }
+  }
+  return result;
+}
+
+std::string clean_optional_string(const std::optional<std::string>& input) {
+  if (!input.has_value()) {
+    return "";
+  }
+  return clean_string(input.value());
+}
+
 Routes::Routes(std::shared_ptr<magic_core::FileProcessingService> file_processing_service,
                std::shared_ptr<magic_core::FileDeleteService> file_delete_service,
                std::shared_ptr<magic_core::FileInfoService> file_info_service,
@@ -297,13 +325,13 @@ crow::response Routes::handle_list_tasks(const crow::request &req) {
         for (const auto &task : tasks) {
           nlohmann::json task_json;
           task_json["id"] = task.id;
-          task_json["task_type"] = task.task_type;
+          task_json["task_type"] = clean_string(task.task_type);
           task_json["status"] = magic_core::to_string(task.status);
           task_json["priority"] = task.priority;
-          task_json["target_path"] = task.target_path;
-          task_json["target_tag"] = task.target_tag;
-          task_json["payload"] = task.payload;
-          task_json["error_message"] = task.error_message;
+          task_json["target_path"] = clean_optional_string(task.target_path);
+          task_json["target_tag"] = clean_optional_string(task.target_tag);
+          task_json["payload"] = clean_optional_string(task.payload);
+          task_json["error_message"] = clean_optional_string(task.error_message);
           task_json["created_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.created_at);
           task_json["updated_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.updated_at);
           tasks_json.push_back(task_json);
@@ -326,13 +354,13 @@ crow::response Routes::handle_list_tasks(const crow::request &req) {
         for (const auto &task : tasks) {
           nlohmann::json task_json;
           task_json["id"] = task.id;
-          task_json["task_type"] = task.task_type;
+          task_json["task_type"] = clean_string(task.task_type);
           task_json["status"] = magic_core::to_string(task.status);
           task_json["priority"] = task.priority;
-          task_json["target_path"] = task.target_path;
-          task_json["target_tag"] = task.target_tag;
-          task_json["payload"] = task.payload;
-          task_json["error_message"] = task.error_message;
+          task_json["target_path"] = clean_optional_string(task.target_path);
+          task_json["target_tag"] = clean_optional_string(task.target_tag);
+          task_json["payload"] = clean_optional_string(task.payload);
+          task_json["error_message"] = clean_optional_string(task.error_message);
           task_json["created_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.created_at);
           task_json["updated_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.updated_at);
           tasks_json.push_back(task_json);
@@ -344,7 +372,14 @@ crow::response Routes::handle_list_tasks(const crow::request &req) {
     response["data"]["tasks"] = tasks_json;
     response["data"]["count"] = tasks_json.size();
     
-    return create_json_response(response);
+    // Try to serialize - if it fails due to UTF-8 issues, return a safe error
+    try {
+      return create_json_response(response);
+    } catch (const nlohmann::json::exception& e) {
+      std::cerr << "JSON serialization failed, likely due to UTF-8 issues: " << e.what() << std::endl;
+      nlohmann::json error_response = create_error_response("Unable to serialize task data due to encoding issues");
+      return create_json_response(error_response, 500);
+    }
   } catch (const std::exception &e) {
     std::cerr << "Exception in handle_list_tasks: " << e.what() << std::endl;
     nlohmann::json error_response = create_error_response(e.what());
@@ -372,13 +407,13 @@ crow::response Routes::handle_get_task_status(const crow::request &req, const st
         if (task.id == id) {
           nlohmann::json task_json;
           task_json["id"] = task.id;
-          task_json["task_type"] = task.task_type;
+          task_json["task_type"] = clean_string(task.task_type);
           task_json["status"] = magic_core::to_string(task.status);
           task_json["priority"] = task.priority;
-          task_json["target_path"] = task.target_path;
-          task_json["target_tag"] = task.target_tag;
-          task_json["payload"] = task.payload;
-          task_json["error_message"] = task.error_message;
+          task_json["target_path"] = clean_optional_string(task.target_path);
+          task_json["target_tag"] = clean_optional_string(task.target_tag);
+          task_json["payload"] = clean_optional_string(task.payload);
+          task_json["error_message"] = clean_optional_string(task.error_message);
           task_json["created_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.created_at);
           task_json["updated_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.updated_at);
           
