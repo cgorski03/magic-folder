@@ -525,16 +525,39 @@ void CliHandler::print_file_list_response(const nlohmann::json& response) {
         std::cout << "Found " << response.size() << " file(s):\n" << std::endl;
         
         for (const auto& file : response) {
-            int id = file["id"].get<int>();
-            std::string path = file["path"].get<std::string>();
-            int size = file["size"].get<int>();
-            std::string type = file["type"].get<std::string>();
-            
-            std::cout << "  ID: " << id << std::endl;
-            std::cout << "  Path: " << path << std::endl;
-            std::cout << "  Size: " << size << " bytes" << std::endl;
-            std::cout << "  Type: " << type << std::endl;
-            std::cout << std::string(50, '-') << std::endl;
+            try {
+                // Handle different possible types for each field
+                int id = file["id"].get<int>();
+                std::string path = file["path"].get<std::string>();
+                long long size = file["size"].get<long long>();
+                
+                // Handle type field - it appears to be a number, convert to meaningful string
+                std::string type;
+                auto type_val = file["type"];
+                if (type_val.is_number()) {
+                    int type_num = type_val.get<int>();
+                    switch (type_num) {
+                        case 0: type = "text"; break;
+                        case 1: type = "binary"; break;
+                        case 2: type = "markdown"; break;
+                        case 3: type = "json"; break;
+                        case 4: type = "pdf"; break;
+                        default: type = "unknown(" + std::to_string(type_num) + ")"; break;
+                    }
+                } else {
+                    type = type_val.get<std::string>();
+                }
+                
+                std::cout << "  ID: " << id << std::endl;
+                std::cout << "  Path: " << path << std::endl;
+                std::cout << "  Size: " << size << " bytes" << std::endl;
+                std::cout << "  Type: " << type << std::endl;
+                std::cout << std::string(50, '-') << std::endl;
+            } catch (const std::exception& e) {
+                std::cout << "  Error parsing file entry: " << e.what() << std::endl;
+                std::cout << "  Raw entry: " << file.dump() << std::endl;
+                std::cout << std::string(50, '-') << std::endl;
+            }
         }
         
         std::cout << "\nTip: Use 'magic_cli chunks --file-id <ID>' to view chunks for a specific file." << std::endl;
