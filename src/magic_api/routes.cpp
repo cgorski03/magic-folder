@@ -10,6 +10,34 @@
 #include "magic_core/db/task_queue_repo.hpp"
 
 namespace magic_api {
+
+// Simple helper to clean strings for JSON serialization
+std::string clean_string(const std::string& input) {
+  std::string result;
+  result.reserve(input.size());
+  
+  for (unsigned char c : input) {
+    if (c >= 32 && c < 127) {
+      // Printable ASCII
+      result += c;
+    } else if (c == '\n' || c == '\r' || c == '\t') {
+      // Keep common whitespace
+      result += c;
+    } else {
+      // Replace problematic characters with space
+      result += ' ';
+    }
+  }
+  return result;
+}
+
+std::string clean_optional_string(const std::optional<std::string>& input) {
+  if (!input.has_value()) {
+    return "";
+  }
+  return clean_string(input.value());
+}
+
 Routes::Routes(std::shared_ptr<magic_core::FileProcessingService> file_processing_service,
                std::shared_ptr<magic_core::FileDeleteService> file_delete_service,
                std::shared_ptr<magic_core::FileInfoService> file_info_service,
@@ -58,6 +86,12 @@ void Routes::register_routes(Server &server) {
       .methods(crow::HTTPMethod::DELETE)([this](const crow::request &req, const std::string &path) {
         return handle_delete_file(req, path);
       });
+
+  // Get file chunks endpoint
+  CROW_ROUTE(app, "/files/<string>/chunks")
+  ([this](const crow::request &req, const std::string &file_id) {
+    return handle_get_file_chunks(req, file_id);
+  });
 
   // Task management endpoints
   CROW_ROUTE(app, "/tasks")
@@ -183,6 +217,7 @@ crow::response Routes::handle_list_files(const crow::request &req) {
     nlohmann::json results = nlohmann::json::array();
     for (const auto &file : files) {
       nlohmann::json file_info;
+      file_info["id"] = file.id;
       file_info["path"] = file.path;
       file_info["size"] = file.file_size;
       file_info["type"] = file.file_type;
@@ -290,13 +325,13 @@ crow::response Routes::handle_list_tasks(const crow::request &req) {
         for (const auto &task : tasks) {
           nlohmann::json task_json;
           task_json["id"] = task.id;
-          task_json["task_type"] = task.task_type;
+          task_json["task_type"] = clean_string(task.task_type);
           task_json["status"] = magic_core::to_string(task.status);
           task_json["priority"] = task.priority;
-          task_json["target_path"] = task.target_path;
-          task_json["target_tag"] = task.target_tag;
-          task_json["payload"] = task.payload;
-          task_json["error_message"] = task.error_message;
+          task_json["target_path"] = clean_optional_string(task.target_path);
+          task_json["target_tag"] = clean_optional_string(task.target_tag);
+          task_json["payload"] = clean_optional_string(task.payload);
+          task_json["error_message"] = clean_optional_string(task.error_message);
           task_json["created_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.created_at);
           task_json["updated_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.updated_at);
           tasks_json.push_back(task_json);
@@ -319,13 +354,13 @@ crow::response Routes::handle_list_tasks(const crow::request &req) {
         for (const auto &task : tasks) {
           nlohmann::json task_json;
           task_json["id"] = task.id;
-          task_json["task_type"] = task.task_type;
+          task_json["task_type"] = clean_string(task.task_type);
           task_json["status"] = magic_core::to_string(task.status);
           task_json["priority"] = task.priority;
-          task_json["target_path"] = task.target_path;
-          task_json["target_tag"] = task.target_tag;
-          task_json["payload"] = task.payload;
-          task_json["error_message"] = task.error_message;
+          task_json["target_path"] = clean_optional_string(task.target_path);
+          task_json["target_tag"] = clean_optional_string(task.target_tag);
+          task_json["payload"] = clean_optional_string(task.payload);
+          task_json["error_message"] = clean_optional_string(task.error_message);
           task_json["created_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.created_at);
           task_json["updated_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.updated_at);
           tasks_json.push_back(task_json);
@@ -337,7 +372,14 @@ crow::response Routes::handle_list_tasks(const crow::request &req) {
     response["data"]["tasks"] = tasks_json;
     response["data"]["count"] = tasks_json.size();
     
-    return create_json_response(response);
+    // Try to serialize - if it fails due to UTF-8 issues, return a safe error
+    try {
+      return create_json_response(response);
+    } catch (const nlohmann::json::exception& e) {
+      std::cerr << "JSON serialization failed, likely due to UTF-8 issues: " << e.what() << std::endl;
+      nlohmann::json error_response = create_error_response("Unable to serialize task data due to encoding issues");
+      return create_json_response(error_response, 500);
+    }
   } catch (const std::exception &e) {
     std::cerr << "Exception in handle_list_tasks: " << e.what() << std::endl;
     nlohmann::json error_response = create_error_response(e.what());
@@ -365,13 +407,13 @@ crow::response Routes::handle_get_task_status(const crow::request &req, const st
         if (task.id == id) {
           nlohmann::json task_json;
           task_json["id"] = task.id;
-          task_json["task_type"] = task.task_type;
+          task_json["task_type"] = clean_string(task.task_type);
           task_json["status"] = magic_core::to_string(task.status);
           task_json["priority"] = task.priority;
-          task_json["target_path"] = task.target_path;
-          task_json["target_tag"] = task.target_tag;
-          task_json["payload"] = task.payload;
-          task_json["error_message"] = task.error_message;
+          task_json["target_path"] = clean_optional_string(task.target_path);
+          task_json["target_tag"] = clean_optional_string(task.target_tag);
+          task_json["payload"] = clean_optional_string(task.payload);
+          task_json["error_message"] = clean_optional_string(task.error_message);
           task_json["created_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.created_at);
           task_json["updated_at"] = magic_core::TaskQueueRepo::time_point_to_string(task.updated_at);
           
@@ -451,6 +493,46 @@ crow::response Routes::handle_clear_completed_tasks(const crow::request &req) {
     
   } catch (const std::exception &e) {
     std::cerr << "Exception in handle_clear_completed_tasks: " << e.what() << std::endl;
+    nlohmann::json error_response = create_error_response(e.what());
+    return create_json_response(error_response, 500);
+  }
+}
+
+crow::response Routes::handle_get_file_chunks(const crow::request &req, const std::string &file_id) {
+  try {
+    std::cout << "Getting chunks for file ID: " << file_id << std::endl;
+    
+    // Parse file_id as integer
+    int id;
+    try {
+      id = std::stoi(file_id);
+    } catch (const std::invalid_argument &e) {
+      nlohmann::json error_response = create_error_response("Invalid file ID format");
+      return create_json_response(error_response, 400);
+    }
+    
+    // Get chunks from file info service
+    std::vector<magic_core::ChunkInfo> chunks = file_info_service_->get_file_chunks(id);
+    
+    // Convert to JSON
+    nlohmann::json chunks_json = nlohmann::json::array();
+    for (const auto &chunk : chunks) {
+      nlohmann::json chunk_json;
+      chunk_json["id"] = chunk.id;
+      chunk_json["chunk_index"] = chunk.chunk_index;
+      chunk_json["content"] = chunk.content;
+      chunks_json.push_back(chunk_json);
+    }
+    
+    nlohmann::json response = create_success_response("File chunks retrieved successfully");
+    response["data"]["file_id"] = id;
+    response["data"]["chunks"] = chunks_json;
+    response["data"]["count"] = chunks_json.size();
+    
+    return create_json_response(response);
+    
+  } catch (const std::exception &e) {
+    std::cerr << "Exception in handle_get_file_chunks: " << e.what() << std::endl;
     nlohmann::json error_response = create_error_response(e.what());
     return create_json_response(error_response, 500);
   }

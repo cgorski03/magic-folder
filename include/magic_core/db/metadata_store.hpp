@@ -150,6 +150,10 @@ class MetadataStore {
   bool file_exists(const std::string &path);
   std::optional<ProcessingStatus> file_processing_status(std::string content_hash);
 
+  // File watcher support methods
+  void update_path_if_exists(const std::string& old_path, const std::string& new_path);
+  void mark_removed_if_exists(const std::string& path);
+
   std::vector<FileSearchResult> search_similar_files(const std::vector<float> &query_vector, int k);
   std::vector<ChunkSearchResult> search_similar_chunks(const std::vector<int> &file_ids,
                                                        const std::vector<float> &query_vector,

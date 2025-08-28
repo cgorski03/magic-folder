@@ -39,8 +39,11 @@ class FileProcessingService {
       std::shared_ptr<magic_core::TaskQueueRepo> task_queue_repo,
       std::shared_ptr<magic_core::ContentExtractorFactory> content_extractor_factory,
       std::shared_ptr<magic_core::OllamaClient> ollama_client);
+  
+  virtual ~FileProcessingService() = default;
+  
   // Request a file to be processed, if it's not already in the queue
-  std::optional<long long> request_processing(const std::filesystem::path& file_path);
+  virtual std::optional<long long> request_processing(const std::filesystem::path& file_path);
   
  private:
   static BasicFileMetadata create_file_stub(const std::filesystem::path& file_path, FileType file_type, std::string content_hash);

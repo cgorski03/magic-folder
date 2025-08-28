@@ -16,6 +16,7 @@ namespace magic_cli
     Info,
     Delete,
     Help,
+    Chunks,
     // Task management commands
     ListTasks,
     TaskStatus,
@@ -37,6 +38,8 @@ namespace magic_cli
     std::string task_id;
     std::string status_filter;
     int older_than_days;
+    // Chunks command options
+    std::string file_id;
   };
 
   class CliError : public std::exception
@@ -91,6 +94,7 @@ namespace magic_cli
     void handle_info_command(const CliOptions &options);
     void handle_delete_command(const CliOptions &options);
     void handle_help_command(const CliOptions &options);
+    void handle_chunks_command(const CliOptions &options);
     
     // Task management command handlers
     void handle_list_tasks_command(const CliOptions &options);
@@ -109,6 +113,7 @@ namespace magic_cli
     void print_json_response(const nlohmann::json &response);
     void print_magic_search_response(const nlohmann::json &response);
     void print_file_search_response(const nlohmann::json &response);
+    void print_file_list_response(const nlohmann::json &response);
     void print_error(const std::string &error);
     void print_help();
     std::string build_url(const std::string &endpoint);
@@ -117,6 +122,9 @@ namespace magic_cli
     void print_task_list_response(const nlohmann::json &response);
     void print_task_status_response(const nlohmann::json &response);
     void print_task_progress_response(const nlohmann::json &response);
+    
+    // Chunks response printer
+    void print_chunks_response(const nlohmann::json &response);
   };
 
 }

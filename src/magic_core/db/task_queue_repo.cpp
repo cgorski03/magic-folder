@@ -204,4 +204,29 @@ std::optional<TaskProgressDTO> TaskQueueRepo::get_task_progress(long long task_i
     throw TaskQueueRepoError(format_db_error("get_task_progress", e));
   }
 }
+
+void TaskQueueRepo::enqueue_process_file(const std::string& file_path, int priority) {
+  try {
+    create_file_process_task("PROCESS_FILE", file_path, priority);
+  } catch (const sqlite::sqlite_exception& e) {
+    // If it's a constraint violation (duplicate), it's safe to ignore
+    if (e.get_code() == SQLITE_CONSTRAINT) {
+      return; // File already queued
+    }
+    throw TaskQueueRepoError(format_db_error("enqueue_process_file", e));
+  }
+}
+
+void TaskQueueRepo::enqueue_reindex_file(const std::string& file_path, int priority) {
+  try {
+    create_file_process_task("REINDEX_FILE", file_path, priority);
+  } catch (const sqlite::sqlite_exception& e) {
+    // If it's a constraint violation (duplicate), it's safe to ignore
+    if (e.get_code() == SQLITE_CONSTRAINT) {
+      return; // File already queued
+    }
+    throw TaskQueueRepoError(format_db_error("enqueue_reindex_file", e));
+  }
+}
+
 }  // namespace magic_core

@@ -50,6 +50,7 @@ class Routes {
   crow::response handle_list_files(const crow::request &req);
   crow::response handle_get_file_info(const crow::request &req, const std::string &path);
   crow::response handle_delete_file(const crow::request &req, const std::string &path);
+  crow::response handle_get_file_chunks(const crow::request &req, const std::string &file_id);
   
   // Task management endpoints
   crow::response handle_list_tasks(const crow::request &req);

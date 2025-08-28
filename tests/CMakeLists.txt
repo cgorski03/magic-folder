@@ -20,6 +20,7 @@ set(ALL_TEST_SOURCES
     unit/core/task_factory_test.cpp
     unit/core/process_file_task_test.cpp
     unit/core/service_provider_test.cpp
+    unit/core/file_watcher_service_test.cpp
     unit/services/compression_service_test.cpp
     unit/services/file_processing_service_test.cpp
     unit/services/search_service_test.cpp
@@ -27,6 +28,7 @@ set(ALL_TEST_SOURCES
     unit/extractors/markdown_extractor_test.cpp
     unit/extractors/plaintext_extractor_test.cpp
     unit/extractors/content_extractor_factory_test.cpp
+    unit/extractors/pdf_extractor_mac_test.cpp
     unit/db/metadata_store_test.cpp
     unit/db/file_info_service_test.cpp
     unit/db/file_delete_service_test.cpp

@@ -7,6 +7,7 @@ set(CORE_TEST_SOURCES
     task_factory_test.cpp
     process_file_task_test.cpp
     service_provider_test.cpp
+    file_watcher_service_test.cpp
 )
 
 # Create core tests library
@@ -33,8 +34,16 @@ target_compile_features(magic_test_core PUBLIC cxx_std_20)
 
 # Define test targets for core functionality
 add_custom_target(test_core
-    COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="*WorkerTest*:*WorkerPoolTest*:*TaskFactoryTest*:*ProcessFileTaskTest*:*ServiceProviderTest*"
+    COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="*WorkerTest*:*WorkerPoolTest*:*TaskFactoryTest*:*ProcessFileTaskTest*:*ServiceProviderTest*:*FileWatcherServiceTest*"
     DEPENDS magic_folder_tests
     COMMENT "Running all core tests"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+# Specific target for file watcher tests
+add_custom_target(test_file_watcher
+    COMMAND $<TARGET_FILE:magic_folder_tests> --gtest_filter="FileWatcherServiceTest.*"
+    DEPENDS magic_folder_tests
+    COMMENT "Running FileWatcherService tests only"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 ) 
