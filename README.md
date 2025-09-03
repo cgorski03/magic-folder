@@ -20,11 +20,11 @@ An intelligent file management system leveraging locally-run LLMs and embedding 
   - Background Worker + WorkerPool processing via task queue
   - REST API + CLI working against a local Ollama server
   - Unit tests with mocks
+  - PDF extractor and more content types
 - Next Phase (in progress/planned)
   - Tauri desktop UI (lightweight, cross-platform)
   - File watching service (producer) + health metrics
   - Additional workers/tasks (retroactive AI tagging, index maintenance, virtual views)
-  - PDF extractor and more content types
 
 ## Architecture Overview
 
@@ -49,7 +49,7 @@ graph TB
     Storage[Managed Storage<br/>UUID/Hash based]
     
     %% Core Services
-    Watcher[FileWatcherService<br/><i>planned</i>]
+    Watcher[FileWatcherService]
     Queue[(TaskQueue<br/>SQLCipher DB)]
     Pool[WorkerPool<br/>N Threads]
     
@@ -86,7 +86,7 @@ graph TB
     
     %% Search Flow
     API --> Search
-    Search --> SummaryIdx
+    Search --> SummaryId
     Search --> ChunkIdx
     Search --> MetaDB
     
